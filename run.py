@@ -50,25 +50,29 @@ MAIN_LOG_FILE = os.path.join("logs", "bot_main.log")
 
 # Create handlers
 rotating_file_handler = RotatingFileHandler(MAIN_LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
-stream_handler = logging.StreamHandler(stream=sys.stdout) # Explicitly use sys.stdout
-stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-# Attempt to set encoding for stream_handler if possible, though it might be ignored for console
-try:
-    stream_handler.encoding = 'utf-8'
-except AttributeError:
-    # If direct encoding setting is not available, rely on environment (PYTHONIOENCODING)
-    # or accept platform default for console, file log will still be utf-8
-    pass 
+rotating_file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        rotating_file_handler,
-        stream_handler
-    ]
-)
-logger = logging.getLogger(__name__)
+stream_handler = logging.StreamHandler(stream=sys.stdout) 
+stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+# Forcing UTF-8 on stdout for Windows can be tricky and is best handled by PYTHONIOENCODING.
+# The 'encoding' property for StreamHandler is for when it writes to a file, not console.
+# So, we'll rely on RotatingFileHandler for guaranteed UTF-8 logs and let console be platform default or PYTHONIOENCODING.
+
+# Get root logger
+logger = logging.getLogger()
+logger.setLevel(logging.INFO) # Set level for the root logger
+
+# Remove any existing handlers from basicConfig if any were implicitly added
+for handler in logger.handlers[:]:
+    logger.removeHandler(handler)
+
+# Add our configured handlers
+logger.addHandler(rotating_file_handler)
+logger.addHandler(stream_handler)
+
+# Also configure the logger for the current module (__main__) if needed, though root logger config should cover it.
+# module_logger = logging.getLogger(__name__)
+# module_logger.info("This is a test from module_logger") # This will now use the root logger's handlers and level.
 
 
 # Initialize the Pyrogram client with improved session handling
