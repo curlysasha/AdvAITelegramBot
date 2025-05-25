@@ -1,10 +1,13 @@
 import os
 import config
-import pyrogram
 import time
-from pyrogram import filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
-from pyrogram.enums import ChatAction, ChatType
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.enums import ParseMode, ChatType, ChatAction
+from aiogram.filters import Command, CommandStart
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup 
+# from pyrogram import filters # Commented out Pyrogram filters
+# from pyrogram.types import InputMediaPhoto # Commented out Pyrogram types
+# ChatAction is now imported from aiogram.enums
 from modules.user.start import start, start_inline
 from modules.user.help import help, help_inline
 from modules.user.commands import command_inline
@@ -57,14 +60,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Initialize the Pyrogram client with improved session handling
-advAiBot = pyrogram.Client(
-    "AdvChatGptBotV2", 
-    bot_token=config.BOT_TOKEN, 
-    api_id=config.API_KEY, 
-    api_hash=config.API_HASH,
-    workdir="sessions"
-)
+# Initialize the Aiogram Bot and Dispatcher
+bot = Bot(token=config.BOT_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher()
 
 # Track bot statistics
 bot_stats = {
@@ -77,76 +75,35 @@ bot_stats = {
 # Get the cleanup scheduler function to run later
 cleanup_scheduler = start_cleanup_scheduler()
 
-@advAiBot.on_message(filters.command("start"))
-async def start_command(bot, update):
-    # Start the cleanup scheduler on first command
-    global cleanup_scheduler_task, ongoing_generations_cleanup_task, ai_ongoing_generations_cleanup_task
-    if not 'cleanup_scheduler_task' in globals() or cleanup_scheduler_task is None:
-        cleanup_scheduler_task = asyncio.create_task(cleanup_scheduler())
-        logger.info("Started image generation cleanup scheduler task")
+@dp.message(CommandStart())
+async def start_command(message: types.Message):
+    # Startup logic (cleanup tasks, restart marker) has been moved to main()
         
-    if not 'ongoing_generations_cleanup_task' in globals() or ongoing_generations_cleanup_task is None:
-        ongoing_generations_cleanup_task = asyncio.create_task(cleanup_ongoing_generations())
-        logger.info("Started inline generations cleanup scheduler task")
-        
-    if not 'ai_ongoing_generations_cleanup_task' in globals() or ai_ongoing_generations_cleanup_task is None:
-        ai_ongoing_generations_cleanup_task = asyncio.create_task(ai_cleanup_ongoing_generations())
-        logger.info("Started inline AI generations cleanup scheduler task")
-    
-    # Check for restart marker file on first command
-    if not hasattr(advAiBot, "_restart_checked"):
-        logger.info("Checking for restart marker on first command")
-        await check_restart_marker(bot)
-        setattr(advAiBot, "_restart_checked", True)
-        
-    bot_stats["active_users"].add(update.from_user.id)
+    bot_stats["active_users"].add(message.from_user.id)
     
     # Differentiate between private chats and group chats
-    if update.chat.type == ChatType.PRIVATE:
-        logger.info(f"User {update.from_user.id} started the bot in private chat")
-        await start(bot, update)
+    if message.chat.type == ChatType.PRIVATE:
+        logger.info(f"User {message.from_user.id} started the bot in private chat")
+        await start(bot, message) # Pass the global bot and Aiogram message
     else:
         # This is a group chat
-        logger.info(f"User {update.from_user.id} started the bot in group chat {update.chat.id} ({update.chat.title})")
+        logger.info(f"User {message.from_user.id} started the bot in group chat {message.chat.id} ({message.chat.title})")
         # Import the group_start function from the newly created file
         from modules.user.group_start import group_start
-        await group_start(bot, update)
+        await group_start(bot, message) # Pass the global bot and Aiogram message
     
-    await channel_log(bot, update, "/start")
+    await channel_log(bot, message, "/start") # Pass the global bot and Aiogram message
 
-@advAiBot.on_message(filters.command("help"))
-async def help_command(bot, update):
-    logger.info(f"User {update.from_user.id} requested help")
-    await help(bot, update)
-    await channel_log(bot, update, "/help")
+@dp.message(Command(commands=["help"]))
+async def help_command(message: types.Message):
+    logger.info(f"User {message.from_user.id} requested help")
+    await help(bot, message) # Pass the global bot and Aiogram message
+    await channel_log(bot, message, "/help") # Pass the global bot and Aiogram message
 
+# Old Pyrogram custom filters are removed.
 
-def is_chat_text_filter():
-    async def funcc(_, __, update):
-        if bool(update.text):
-            return not update.text.startswith("/")
-        return False
-    return filters.create(funcc)
-
-# Add a custom filter for non-command messages
-def is_not_command_filter():
-    async def func(_, __, message):
-        if message.text:
-            return not message.text.startswith('/')
-        return True  # Non-text messages are not commands
-    return filters.create(func)
-
-# Add a custom filter for replies to bot messages
-def is_reply_to_bot_filter():
-    async def func(_, __, message):
-        if message.reply_to_message and message.reply_to_message.from_user:
-            # Check if the message is replying to the bot
-            return message.reply_to_message.from_user.id == advAiBot.me.id
-        return False
-    return filters.create(func)
-
-@advAiBot.on_message(is_chat_text_filter() & filters.text & filters.private)
-async def handle_message(client, message):
+@dp.message(F.text, ~F.text.startswith('/'), F.chat.type == ChatType.PRIVATE)
+async def handle_message(message: types.Message):
     # Check for maintenance mode
     if await maintenance_check(message.from_user.id):
         maint_msg = await maintenance_message(message.from_user.id)
@@ -156,57 +113,57 @@ async def handle_message(client, message):
     bot_stats["messages_processed"] += 1
     bot_stats["active_users"].add(message.from_user.id)
     logger.info(f"Processing message from user {message.from_user.id}")
-    await aires(client, message)
+    await aires(bot, message) # Pass global bot and Aiogram message
 
-@advAiBot.on_inline_query()
-async def inline_query_handler(client, inline_query):
+@dp.inline_query()
+async def inline_query_handler(inline_query: types.InlineQuery):
     """Handler for inline queries, for both image generation and AI responses"""
     bot_stats["active_users"].add(inline_query.from_user.id)
     logger.info(f"Processing inline query from user {inline_query.from_user.id}: '{inline_query.query}'")
     
     # Route to appropriate handler based on query content
-    await handle_inline_query(client, inline_query)
+    await handle_inline_query(bot, inline_query) # Pass global bot and Aiogram inline_query
 
-@advAiBot.on_callback_query()
-async def callback_query(client, callback_query):
+@dp.callback_query()
+async def callback_query_handler(callback_query: types.CallbackQuery): # Renamed function and parameter
     try:
         # Handle restart callbacks
         if callback_query.data == "confirm_restart" or callback_query.data == "cancel_restart":
-            await handle_restart_callback(client, callback_query)
+            await handle_restart_callback(bot, callback_query)
             return
         
         # Handle maintenance mode toggle and feature callbacks
         if callback_query.data.startswith("toggle_") and callback_query.data.count("_") >= 2:
-            await handle_feature_toggle(client, callback_query)
+            await handle_feature_toggle(bot, callback_query)
             return
         elif callback_query.data.startswith("feature_info_"):
-            await handle_feature_info(client, callback_query)
+            await handle_feature_info(bot, callback_query)
             return
         elif callback_query.data == "admin_panel":
             from modules.user.user_support import admin_panel_callback
-            await admin_panel_callback(client, callback_query)
+            await admin_panel_callback(bot, callback_query)
             return
         elif callback_query.data == "support_donate":
             from modules.maintenance import handle_donation
-            await handle_donation(client, callback_query)
+            await handle_donation(bot, callback_query)
             return
         # Advanced statistics panel
         elif callback_query.data == "admin_view_stats":
             from modules.admin import handle_stats_panel
-            await handle_stats_panel(client, callback_query)
+            await handle_stats_panel(bot, callback_query)
             return
         elif callback_query.data == "admin_refresh_stats":
             from modules.admin import handle_refresh_stats
-            await handle_refresh_stats(client, callback_query)
+            await handle_refresh_stats(bot, callback_query)
             return
         elif callback_query.data == "admin_export_stats":
             from modules.admin import handle_export_stats
-            await handle_export_stats(client, callback_query)
+            await handle_export_stats(bot, callback_query)
             return
         # User management panel
         elif callback_query.data == "admin_users":
             from modules.admin import handle_user_management
-            await handle_user_management(client, callback_query)
+            await handle_user_management(bot, callback_query)
             return
         elif callback_query.data.startswith("admin_users_filter_"):
             from modules.admin import handle_user_management
@@ -219,44 +176,41 @@ async def callback_query(client, callback_query):
                     # Support all filter types
                     valid_filters = ["all", "recent", "active", "new", "inactive", "groups"]
                     if filter_type in valid_filters:
-                        await handle_user_management(client, callback_query, page, filter_type)
+                        await handle_user_management(bot, callback_query, page, filter_type)
                     else:
                         # Default to recent if invalid filter
-                        await handle_user_management(client, callback_query, page, "recent")
+                        await handle_user_management(bot, callback_query, page, "recent")
                 else:
                     # Default to first page, recent filter
-                    await handle_user_management(client, callback_query)
+                    await handle_user_management(bot, callback_query)
             except Exception as e:
                 logger.error(f"Error in user filter handling: {str(e)}")
                 # Default to first page, recent filter
-                await handle_user_management(client, callback_query)
+                await handle_user_management(bot, callback_query)
             return
         # Group permissions help callback
         elif callback_query.data == "group_permissions_help":
             from modules.group.group_permissions import handle_permissions_help
-            await handle_permissions_help(client, callback_query)
+            await handle_permissions_help(bot, callback_query)
             return
         elif callback_query.data == "dismiss_permissions_help":
             # Just acknowledge and close the message
             await callback_query.answer("Permissions help dismissed")
             # Try to delete the message if possible
             try:
-                await client.delete_messages(
-                    chat_id=callback_query.message.chat.id,
-                    message_ids=callback_query.message.id
-                )
+                await callback_query.message.delete()
             except Exception:
                 # If can't delete, just edit to a simple confirmation
-                await callback_query.edit_message_text("✅ Thanks for reviewing the permissions info!")
+                await callback_query.message.edit_text("✅ Thanks for reviewing the permissions info!")
             return
         elif callback_query.data == "group_start":
             # Import the group_start function from user directory
             from modules.user.group_start import group_start
             # Create a simulated message object for group_start
             simulated_message = callback_query.message
-            simulated_message.from_user = callback_query.from_user
+            simulated_message.from_user = callback_query.from_user # Already correct
             # Call group_start with the simulated message
-            await group_start(client, simulated_message)
+            await group_start(bot, simulated_message) # Pass bot
             # Answer the callback query
             await callback_query.answer("Starting bot in this group")
             return
@@ -268,123 +222,119 @@ async def callback_query(client, callback_query):
         # Standard menu callbacks
         if callback_query.data == "help":
             from modules.user.help import help_inline
-            await help_inline(client, callback_query)
+            await help_inline(bot, callback_query)
         elif callback_query.data == "back":
-            await start_inline(client, callback_query)
+            await start_inline(bot, callback_query)
         elif callback_query.data == "commands":
-            await command_inline(client, callback_query)
+            await command_inline(bot, callback_query)
         elif callback_query.data == "settings":
-            await settings_inline(client, callback_query)
+            await settings_inline(bot, callback_query)
         elif callback_query.data == "settings_v":
-            await settings_language_callback(client, callback_query)
+            await settings_language_callback(bot, callback_query)
         elif callback_query.data in ["settings_voice", "settings_text"]:
-            await change_voice_setting(client, callback_query)
+            await change_voice_setting(bot, callback_query)
         elif callback_query.data == "settings_lans":
-            await settings_langs_callback(client, callback_query)
+            await settings_langs_callback(bot, callback_query)
         elif callback_query.data.startswith("language_"):
-            await change_language_setting(client, callback_query)
+            await change_language_setting(bot, callback_query)
         elif callback_query.data == "settings_voice_inlines":
-            await settings_voice_inlines(client, callback_query)
+            await settings_voice_inlines(bot, callback_query)
         elif callback_query.data == "settings_back":
-            await settings_inline(client, callback_query)
+            await settings_inline(bot, callback_query)
         elif callback_query.data == "settings_assistant":
-            await settings_assistant_callback(client, callback_query)
+            await settings_assistant_callback(bot, callback_query)
         elif callback_query.data == "settings_support":
-            await settings_support_callback(client, callback_query)
+            await settings_support_callback(bot, callback_query)
         elif callback_query.data == "support_developers":
-            await support_developers_callback(client, callback_query)
+            await support_developers_callback(bot, callback_query)
         elif callback_query.data == "support_admins":
-            await support_admins_callback(client, callback_query)
+            await support_admins_callback(bot, callback_query)
         elif callback_query.data == "settings_others":
-            await settings_others_callback(client, callback_query)
+            await settings_others_callback(bot, callback_query)
         elif callback_query.data.startswith("voice_toggle_"):
-            await handle_voice_toggle(client, callback_query)
+            await handle_voice_toggle(bot, callback_query)
         elif callback_query.data.startswith("mode_"):
-            await change_mode_setting(client, callback_query)
+            await change_mode_setting(bot, callback_query)
         elif callback_query.data.startswith("show_text_"):
-            await handle_show_text_callback(client, callback_query)
+            await handle_show_text_callback(bot, callback_query)
         elif callback_query.data.startswith("followup_"):
-            await handle_followup_callback(client, callback_query)
+            await handle_followup_callback(bot, callback_query)
         elif callback_query.data.startswith("rate_"):
-            await handle_rate_callback(client, callback_query)
+            await handle_rate_callback(bot, callback_query)
         elif callback_query.data.startswith("feedback_") or \
              callback_query.data.startswith("img_feedback_positive_") or \
              callback_query.data.startswith("img_feedback_negative_") or \
              callback_query.data.startswith("img_regenerate_") or \
              callback_query.data.startswith("img_style_"):
-            await handle_image_feedback(client, callback_query)
+            await handle_image_feedback(bot, callback_query)
         elif callback_query.data == "group_commands":
             # Handle group command menu
             from modules.user.group_start import handle_group_command_inline
-            await handle_group_command_inline(client, callback_query)
+            await handle_group_command_inline(bot, callback_query)
         elif callback_query.data.startswith("group_cmd_"):
             # Handle specific group command sections
             from modules.user.group_start import handle_group_callbacks
-            await handle_group_callbacks(client, callback_query)
+            await handle_group_callbacks(bot, callback_query)
         elif callback_query.data == "about_bot" or callback_query.data == "group_support":
             # Handle other group menu buttons
             from modules.user.group_start import handle_group_callbacks
-            await handle_group_callbacks(client, callback_query)
+            await handle_group_callbacks(bot, callback_query)
         elif callback_query.data == "admin_view_history":
             from modules.admin.user_history import show_history_search_panel
-            await show_history_search_panel(client, callback_query)
+            await show_history_search_panel(bot, callback_query)
             return
         elif callback_query.data.startswith("history_user_"):
             from modules.admin.user_history import handle_history_user_selection
             user_id = int(callback_query.data.split("_")[2])
-            await handle_history_user_selection(client, callback_query, user_id)
+            await handle_history_user_selection(bot, callback_query, user_id)
             return
         elif callback_query.data.startswith("history_page_"):
             from modules.admin.user_history import handle_history_pagination
             parts = callback_query.data.split("_")
             user_id = int(parts[2])
             page = int(parts[3])
-            await handle_history_pagination(client, callback_query, user_id, page)
+            await handle_history_pagination(bot, callback_query, user_id, page)
             return
         elif callback_query.data == "history_search":
             from modules.admin.user_history import show_history_search_panel
-            await show_history_search_panel(client, callback_query)
+            await show_history_search_panel(bot, callback_query)
             return
         elif callback_query.data == "history_back":
             from modules.admin.user_history import show_history_search_panel
-            await show_history_search_panel(client, callback_query)
+            await show_history_search_panel(bot, callback_query)
             return
         elif callback_query.data.startswith("history_download_"):
             from modules.admin.user_history import get_history_download
             user_id = int(callback_query.data.split("_")[2])
-            await get_history_download(client, callback_query, user_id)
+            await get_history_download(bot, callback_query, user_id)
             return
         elif callback_query.data == "admin_search_user":
             from modules.admin.user_history import show_user_search_form
-            await show_user_search_form(client, callback_query)
+            await show_user_search_form(bot, callback_query)
             return
         elif callback_query.data == "support":
             # Handle the support callback
             from modules.user.user_support import settings_support_callback
-            await settings_support_callback(client, callback_query)
+            await settings_support_callback(bot, callback_query)
             return
         # Help menu category callbacks
         elif callback_query.data.startswith("help_") and callback_query.data != "help":
             from modules.user.help import handle_help_category
-            await handle_help_category(client, callback_query)
+            await handle_help_category(bot, callback_query)
             return
         # Command menu category callbacks
         elif callback_query.data.startswith("cmd_"):
             from modules.user.commands import handle_command_callbacks
-            await handle_command_callbacks(client, callback_query)
+            await handle_command_callbacks(bot, callback_query)
             return
         # Image text back button handler
         elif callback_query.data.startswith("back_to_image_"):
             # Get the user ID from the callback data
             user_id = int(callback_query.data.split("_")[3])
             # Create action buttons again
-            action_markup = InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("📋 Show Extracted Text", callback_data=f"show_text_{user_id}")
-                ],
-                [
-                    InlineKeyboardButton("❓ Ask Follow-up", callback_data=f"followup_{user_id}")
-                ]
+            action_markup = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📋 Show Extracted Text", callback_data=f"show_text_{user_id}")],
+                [InlineKeyboardButton(text="❓ Ask Follow-up", callback_data=f"followup_{user_id}")]
             ])
             # Edit message back to original prompt
             await callback_query.message.edit_text(
@@ -395,7 +345,7 @@ async def callback_query(client, callback_query):
         # Group start back button handler
         elif callback_query.data == "back_to_group_start":
             from modules.user.group_start import handle_group_callbacks
-            await handle_group_callbacks(client, callback_query)
+            await handle_group_callbacks(bot, callback_query)
             return
         else:
             # Unknown callback, just acknowledge it
@@ -403,18 +353,17 @@ async def callback_query(client, callback_query):
             
     except Exception as e:
         logger.error(f"Error in callback query handler: {e}")
-        await error_log(client, f"Callback Query Error: {e}")
+        await error_log(bot, f"Callback Query Error: {e}") 
         # Acknowledge the callback query to prevent hanging UI
         try:
             await callback_query.answer("An error occurred. Please try again later.")
         except:
             pass
 
-
-@advAiBot.on_message(filters.voice)
-async def voice(bot, message):
+@dp.message(types.ContentType.VOICE)
+async def voice_message_handler(message: types.Message): # Renamed and signature updated
     # Check for maintenance mode and voice feature toggle
-    from modules.maintenance import is_feature_enabled
+    from modules.maintenance import is_feature_enabled # Keep local import
     if await maintenance_check(message.from_user.id) or not await is_feature_enabled("voice_features"):
         maint_msg = await maintenance_message(message.from_user.id)
         await message.reply(maint_msg)
@@ -422,13 +371,19 @@ async def voice(bot, message):
         
     bot_stats["voice_messages_processed"] += 1
     bot_stats["active_users"].add(message.from_user.id)
-    await voice_to_text.handle_voice_message(bot, message)
+    await voice_to_text.handle_voice_message(bot, message) # Pass global bot
 
-# Add a new handler for replies to bot messages in groups
-@advAiBot.on_message(is_reply_to_bot_filter() & filters.group & filters.text & is_not_command_filter())
-async def handle_reply_to_bot(bot, message):
+@dp.message(
+    F.text, 
+    ~F.text.startswith('/'), 
+    F.chat.type.in_({ChatType.GROUP, ChatType.SUPERGROUP}), 
+    lambda message: message.reply_to_message and \
+                    message.reply_to_message.from_user and \
+                    message.reply_to_message.from_user.id == bot.id
+)
+async def handle_reply_to_bot(message: types.Message):
     # Check for maintenance mode and AI response toggle
-    from modules.maintenance import is_feature_enabled
+    from modules.maintenance import is_feature_enabled # Keep local import
     if await maintenance_check(message.from_user.id) or not await is_feature_enabled("ai_response"):
         maint_msg = await maintenance_message(message.from_user.id)
         await message.reply(maint_msg)
@@ -448,45 +403,45 @@ async def handle_reply_to_bot(bot, message):
     # Process the query using the AI response function
     await aires(bot, message)
 
-@advAiBot.on_message(filters.command("gleave"))
-async def leave_group_command(bot, update):
-    if update.from_user.id in config.ADMINS:
-        logger.info(f"Admin {update.from_user.id} leaving group {update.chat.id}")
-        await leave_group(bot, update)
-        await channel_log(bot, update, "/gleave", f"Admin leaving group {update.chat.id if update.chat else 'unknown'}")
+@dp.message(Command(commands=["gleave"]))
+async def leave_group_command(message: types.Message): # Signature updated
+    if message.from_user.id in config.ADMINS:
+        logger.info(f"Admin {message.from_user.id} leaving group {message.chat.id}")
+        await leave_group(bot, message) # Pass global bot and Aiogram message
+        await channel_log(bot, message, "/gleave", f"Admin leaving group {message.chat.id if message.chat else 'unknown'}")
     else:
-        logger.warning(f"Unauthorized user {update.from_user.id} attempted to use gleave command")
-        await update.reply_text("⛔ You are not authorized to use this command.")
-        await channel_log(bot, update, "/gleave", f"Unauthorized access attempt", level="WARNING")
+        logger.warning(f"Unauthorized user {message.from_user.id} attempted to use gleave command")
+        await message.reply("⛔ You are not authorized to use this command.") # Aiogram reply
+        await channel_log(bot, message, "/gleave", f"Unauthorized access attempt", level="WARNING")
 
-@advAiBot.on_message(filters.command("rate") & filters.private)
-async def rate_commands(bot, update):
-    await rate_command(bot, update)
+@dp.message(Command(commands=["rate"]), F.chat.type == ChatType.PRIVATE)
+async def rate_commands(message: types.Message):
+    await rate_command(bot, message) # Pass global bot and Aiogram message
 
-@advAiBot.on_message(filters.command("invite"))
-async def invite_commands(bot, update):
-    if update.from_user.id in config.ADMINS:
-        logger.info(f"Admin {update.from_user.id} used invite command")
-        await invite_command(bot, update)
-        await channel_log(bot, update, "/invite", "Admin used invite command")
+@dp.message(Command(commands=["invite"]))
+async def invite_commands(message: types.Message):
+    if message.from_user.id in config.ADMINS:
+        logger.info(f"Admin {message.from_user.id} used invite command")
+        await invite_command(bot, message) # Pass global bot and Aiogram message
+        await channel_log(bot, message, "/invite", "Admin used invite command")
     else:
-        logger.warning(f"Unauthorized user {update.from_user.id} attempted to use invite command")
-        await update.reply_text("⛔ You are not authorized to use this command.")
-        await channel_log(bot, update, "/invite", f"Unauthorized access attempt", level="WARNING")
+        logger.warning(f"Unauthorized user {message.from_user.id} attempted to use invite command")
+        await message.reply("⛔ You are not authorized to use this command.") # Aiogram reply
+        await channel_log(bot, message, "/invite", f"Unauthorized access attempt", level="WARNING")
 
-@advAiBot.on_message(filters.command("uinfo"))
-async def info_commands(bot, update):
-    if update.from_user.id in config.ADMINS:
-        logger.info(f"Admin {update.from_user.id} requested user info")
-        await info_command(bot, update)
-        await channel_log(bot, update, "/uinfo", "Admin requested user info")
+@dp.message(Command(commands=["uinfo"]))
+async def info_commands(message: types.Message):
+    if message.from_user.id in config.ADMINS:
+        logger.info(f"Admin {message.from_user.id} requested user info")
+        await info_command(bot, message) # Pass global bot and Aiogram message
+        await channel_log(bot, message, "/uinfo", "Admin requested user info")
     else:
-        logger.warning(f"Unauthorized user {update.from_user.id} attempted to use uinfo command")
-        await update.reply_text("⛔ You are not authorized to use this command.")
-        await channel_log(bot, update, "/uinfo", f"Unauthorized access attempt", level="WARNING")
+        logger.warning(f"Unauthorized user {message.from_user.id} attempted to use uinfo command")
+        await message.reply("⛔ You are not authorized to use this command.") # Aiogram reply
+        await channel_log(bot, message, "/uinfo", f"Unauthorized access attempt", level="WARNING")
         
-@advAiBot.on_message(filters.text & filters.command(["ai", "ask", "say"]) & filters.group)
-async def handle_group_message(bot, update):
+# @bot.on_message(filters.text & filters.command(["ai", "ask", "say"]) & filters.group) # Commented out
+async def handle_group_message(bot_instance, update): # Renamed bot to bot_instance
     # Check for maintenance mode and AI response feature
     from modules.maintenance import is_feature_enabled
     if await maintenance_check(update.from_user.id) or not await is_feature_enabled("ai_response"):
@@ -499,25 +454,25 @@ async def handle_group_message(bot, update):
     bot_stats["active_users"].add(update.from_user.id)
     
     # Show typing indicator while the AI generates a response
-    await bot.send_chat_action(chat_id=update.chat.id, action=ChatAction.TYPING)
+    # await bot_instance.send_chat_action(chat_id=update.chat.id, action=ChatAction.TYPING) # ChatAction needs to be Aiogram's
     
     # Log the interaction
     command = update.text.split()[0]
-    await channel_log(bot, update, command)
-    await user_log(bot, update, update.text)
+    await channel_log(bot_instance, update, command)
+    await user_log(bot_instance, update, update.text)
     
     # Process the query using the AI response function
-    await aires(bot, update)
+    await aires(bot_instance, update)
 
 
-@advAiBot.on_message(filters.command(["newchat", "reset", "new_conversation", "clear_chat", "new"]))
+# @bot.on_message(filters.command(["newchat", "reset", "new_conversation", "clear_chat", "new"])) # Commented out
 async def handle_new_chat(client, message):
     bot_stats["active_users"].add(message.from_user.id)
     await new_chat(client, message)
-    await channel_log(client, message, "/newchat")
+    await channel_log(client, message, "/newchat") # client might need to be bot
 
 
-@advAiBot.on_message(filters.command(["generate", "gen", "image", "img"]))
+# @bot.on_message(filters.command(["generate", "gen", "image", "img"])) # Commented out
 async def handle_generate(client, message):
     # Check for maintenance mode and image generation toggle
     from modules.maintenance import is_feature_enabled
@@ -529,10 +484,10 @@ async def handle_generate(client, message):
     logger.info(f"User {message.from_user.id} using image generation")
     await handle_generate_command(client, message)
     # Log the command usage
-    await channel_log(client, message, f"/{message.command[0]}", "Image generation requested")
+    await channel_log(client, message, f"/{message.command[0]}", "Image generation requested") # client might need to be bot
 
-@advAiBot.on_message(filters.photo & filters.private)
-async def handle_private_image(bot, update):
+# @bot.on_message(filters.photo & filters.private) # Commented out Pyrogram handler
+async def handle_private_image(bot_instance, update): # Renamed bot to bot_instance
     """Handler for images in private chats"""
     # Check for maintenance mode
     if await maintenance_check(update.from_user.id):
@@ -546,14 +501,14 @@ async def handle_private_image(bot, update):
     logger.info(f"Processing private chat image for user {user_id}")
     
     # For private chats, process all images
-    await extract_text_res(bot, update)
+    await extract_text_res(bot_instance, update)
     
     # Log usage
-    await channel_log(bot, update, "Private Image Analysis")
+    await channel_log(bot_instance, update, "Private Image Analysis")
     logger.info(f"Image analysis for user {user_id} in private chat")
 
-@advAiBot.on_message(filters.photo & filters.group)
-async def handle_group_image(bot, update):
+# @bot.on_message(filters.photo & filters.group) # Commented out Pyrogram handler
+async def handle_group_image(bot_instance, update): # Renamed bot to bot_instance
     """Handler for images in group chats"""
     # Check for maintenance mode
     if await maintenance_check(update.from_user.id):
@@ -593,7 +548,7 @@ async def handle_group_image(bot, update):
             user_question = update.caption[ai_pos + 2:].strip()
     
     # Send typing action
-    await bot.send_chat_action(chat_id=update.chat.id, action=ChatAction.TYPING)
+    # await bot_instance.send_chat_action(chat_id=update.chat.id, action=ChatAction.TYPING) # ChatAction needs to be Aiogram's
     
     # Process the image with OCR and include the user's question
     logger.info(f"Processing group image with AI trigger and question: '{user_question}'")
@@ -602,7 +557,7 @@ async def handle_group_image(bot, update):
     from modules.image.img_to_text import extract_text_from_image
     
     # First get the image file
-    photo_file = await bot.download_media(
+    photo_file = await bot_instance.download_media( # download_media needs to be checked for Aiogram
         message=update.photo.file_id,
         file_name=f"temp_{user_id}_{int(time.time())}.jpg"
     )
@@ -618,14 +573,14 @@ async def handle_group_image(bot, update):
             message_text = f"Text from image:\n\n{extracted_text}"
         
         # Create reply markup for showing extracted text
-        markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔄 Analyze with AI", callback_data=f"followup_{user_id}")]
-        ])
+        # markup = InlineKeyboardMarkup([ # Needs to be Aiogram's InlineKeyboardMarkup
+        #     [InlineKeyboardButton("🔄 Analyze with AI", callback_data=f"followup_{user_id}")]
+        # ])
         
         # Send response with the text and buttons
         await update.reply_text(
-            message_text,
-            reply_markup=markup
+            message_text
+            # reply_markup=markup
         )
     except Exception as e:
         logger.error(f"Error processing group image: {e}")
@@ -639,17 +594,17 @@ async def handle_group_image(bot, update):
             logger.error(f"Error removing temporary file: {e}")
     
     # Log usage
-    await channel_log(bot, update, "Group Image Analysis", "AI-triggered image text extraction in group")
+    await channel_log(bot_instance, update, "Group Image Analysis", "AI-triggered image text extraction in group")
     logger.info(f"AI-triggered image analysis in group {update.chat.id} by user {user_id}")
 
-@advAiBot.on_message(filters.command("settings"))
-async def settings_command(bot, update):
+# @bot.on_message(filters.command("settings")) # Commented out Pyrogram handler
+async def settings_command(bot_instance, update): # Renamed bot to bot_instance
     logger.info(f"User {update.from_user.id} accessed settings")
-    await global_setting_command(bot, update)
-    await channel_log(bot, update, "/settings")
+    await global_setting_command(bot_instance, update)
+    await channel_log(bot_instance, update, "/settings")
 
-@advAiBot.on_message(filters.command("stats") & filters.user(config.ADMINS))
-async def stats_command(bot, update):
+# @bot.on_message(filters.command("stats") & filters.user(config.ADMINS)) # Commented out Pyrogram handler
+async def stats_command(bot_instance, update): # Renamed bot to bot_instance
     logger.info(f"Admin {update.from_user.id} requested stats")
     stats_text = (
         "📊 **Bot Statistics**\n\n"
@@ -659,17 +614,17 @@ async def stats_command(bot, update):
         f"👥 Active Users: {len(bot_stats['active_users'])}\n"
     )
     await update.reply_text(stats_text)
-    await channel_log(bot, update, "/stats", "Admin requested bot statistics")
+    await channel_log(bot_instance, update, "/stats", "Admin requested bot statistics")
 
-@advAiBot.on_message(filters.command(["announce", "broadcast", "acc"]))
-async def announce_command(bot, update):
+# @bot.on_message(filters.command(["announce", "broadcast", "acc"])) # Commented out Pyrogram handler
+async def announce_command(bot_instance, update): # Renamed bot to bot_instance
     if update.from_user.id in config.ADMINS:
         try:
             text = update.text.split(" ", 1)[1]
             logger.info(f"Admin {update.from_user.id} broadcasting message: {text[:50]}...")
             processing_msg = await update.reply_text("📣 Preparing to broadcast message...")
-            await user_db.get_usernames_message(bot, update, text)
-            await channel_log(bot, update, "/announce", f"Admin broadcast message to users", level="WARNING")
+            await user_db.get_usernames_message(bot_instance, update, text)
+            await channel_log(bot_instance, update, "/announce", f"Admin broadcast message to users", level="WARNING")
         except IndexError:
             logger.warning(f"Admin {update.from_user.id} attempted announce without message")
             await update.reply_text(
@@ -679,10 +634,10 @@ async def announce_command(bot, update):
     else:
         logger.warning(f"Unauthorized user {update.from_user.id} attempted to use announce command")
         await update.reply_text("⛔ You are not authorized to use this command.")
-        await channel_log(bot, update, "/announce", f"Unauthorized access attempt", level="WARNING")
+        await channel_log(bot_instance, update, "/announce", f"Unauthorized access attempt", level="WARNING")
 
-@advAiBot.on_message(filters.command("logs") & filters.user(config.ADMINS))
-async def logs_command(bot, update):
+# @bot.on_message(filters.command("logs") & filters.user(config.ADMINS)) # Commented out Pyrogram handler
+async def logs_command(bot_instance, update): # Renamed bot to bot_instance
     logger.info(f"Admin {update.from_user.id} requested logs")
     
     try:
@@ -709,7 +664,7 @@ async def logs_command(bot, update):
                 f.write(log_content)
             
             # Send the file
-            await bot.send_document(
+            await bot_instance.send_document( # send_document needs to be checked for Aiogram
                 chat_id=update.chat.id,
                 document=temp_log_file,
                 caption=f"📋 **Latest Bot Logs**\n\nShowing the most recent 500 log entries as of {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -728,16 +683,16 @@ async def logs_command(bot, update):
             await status_msg.edit_text("❌ No log file found. The bot may not have generated any logs yet.")
         
         # Log this action
-        await channel_log(bot, update, "/logs", "Admin requested latest logs")
+        await channel_log(bot_instance, update, "/logs", "Admin requested latest logs")
         
     except Exception as e:
         logger.error(f"Error in logs command: {str(e)}")
         await update.reply_text(f"❌ **Error**\n\nFailed to retrieve logs: {str(e)}")
         
         # Log the error
-        await error_log(bot, "LOGS_COMMAND", str(e), context=update.text, user_id=update.from_user.id)
+        await error_log(bot_instance, "LOGS_COMMAND", str(e), context=update.text, user_id=update.from_user.id)
 
-@advAiBot.on_message(filters.command(["clear_cache", "clearcache", "clear_images"]))
+# @bot.on_message(filters.command(["clear_cache", "clearcache", "clear_images"])) # Commented out
 async def clear_user_cache(client, message):
     """Handle request to clear user's image cache"""
     user_id = message.from_user.id
@@ -751,14 +706,14 @@ async def clear_user_cache(client, message):
     else:
         await message.reply_text("ℹ️ **No image cache found**\n\nYou don't have any cached images to clear.")
     
-    await channel_log(client, message, "/clear_cache", f"User cleared their image cache")
+    await channel_log(client, message, "/clear_cache", f"User cleared their image cache") # client might need to be bot
 
-async def stats_alert(client, callback_query):
+async def stats_alert(client, callback_query_obj): # Renamed callback_query
     """Show bot statistics in an alert popup"""
     from modules.maintenance import is_admin_user
     
-    if not await is_admin_user(callback_query.from_user.id):
-        await callback_query.answer("You don't have permission to view stats.", show_alert=True)
+    if not await is_admin_user(callback_query_obj.from_user.id):
+        await callback_query_obj.answer("You don't have permission to view stats.", show_alert=True)
         return
     
     stats_text = (
@@ -769,26 +724,26 @@ async def stats_alert(client, callback_query):
     )
     
     try:
-        await callback_query.answer(stats_text, show_alert=True)
+        await callback_query_obj.answer(stats_text, show_alert=True)
     except Exception as e:
         # If too long, try a shorter version
         if "MESSAGE_TOO_LONG" in str(e):
             short_stats = f"Msgs: {bot_stats['messages_processed']}, Users: {len(bot_stats['active_users'])}"
-            await callback_query.answer(short_stats, show_alert=True)
+            await callback_query_obj.answer(short_stats, show_alert=True)
         else:
             # Just acknowledge the callback
-            await callback_query.answer("Could not display stats")
+            await callback_query_obj.answer("Could not display stats")
     
     # Refresh the admin panel with error handling
     try:
         from modules.maintenance import show_admin_panel
-        await show_admin_panel(client, callback_query)
+        await show_admin_panel(client, callback_query_obj) # client might need to be bot
     except Exception as e:
         logger.error(f"Error refreshing admin panel: {str(e)}")
         # Don't re-raise as this is a non-critical refresh
 
-@advAiBot.on_message(filters.group & filters.command(["pin", "unpin", "promote", "demote", "ban", "warn"]))
-async def handle_group_admin_commands(bot, message):
+# @bot.on_message(filters.group & filters.command(["pin", "unpin", "promote", "demote", "ban", "warn"])) # Commented out
+async def handle_group_admin_commands(bot_instance, message): # Renamed bot to bot_instance
     """Handle admin commands in groups with maintenance mode check"""
     # Check maintenance mode - exempt admins
     if await maintenance_check(message.from_user.id):
@@ -799,28 +754,28 @@ async def handle_group_admin_commands(bot, message):
     # Let normal Telegram permission system handle the actual execution
     pass
 
-@advAiBot.on_message(filters.command("restart") & filters.user(config.ADMINS))
-async def handle_restart_command(bot, update):
+# @bot.on_message(filters.command("restart") & filters.user(config.ADMINS)) # Commented out Pyrogram handler
+async def handle_restart_command(bot_instance, update): # Renamed bot to bot_instance
     """Handler for the restart command"""
     logger.info(f"Admin {update.from_user.id} used restart command")
-    await restart_command(bot, update)
-    await channel_log(bot, update, "/restart", "Admin initiated restart command")
+    await restart_command(bot_instance, update)
+    await channel_log(bot_instance, update, "/restart", "Admin initiated restart command")
 
-@advAiBot.on_message(filters.new_chat_members)
+# @bot.on_message(filters.new_chat_members) # Commented out Pyrogram handler
 async def handle_new_chat_members(client, message):
     """Handle when new members are added to a group, including the bot itself"""
     # Import the new_chat_members function from the group module
     from modules.group.new_group import new_chat_members
-    await new_chat_members(client, message)
+    await new_chat_members(client, message) # client might need to be bot
     
     # Log the event
     try:
-        await channel_log(client, message, "new_members")
+        await channel_log(client, message, "new_members") # client might need to be bot
     except Exception as e:
         logger.error(f"Error logging new chat members: {e}")
 
-@advAiBot.on_message(filters.command("history") & filters.user(config.ADMINS))
-async def history_command(bot, update):
+# @bot.on_message(filters.command("history") & filters.user(config.ADMINS)) # Commented out Pyrogram handler
+async def history_command(bot_instance, update): # Renamed bot to bot_instance
     """Handler for the history command to view a user's chat history"""
     logger.info(f"Admin {update.from_user.id} requested chat history")
     
@@ -844,20 +799,20 @@ async def history_command(bot, update):
         
         # Call the function to get user chat history
         from modules.admin.user_history import get_user_chat_history
-        await get_user_chat_history(bot, update, target_user_id, status_msg)
+        await get_user_chat_history(bot_instance, update, target_user_id, status_msg)
         
         # Log this admin action
-        await channel_log(bot, update, "/history", f"Admin requested chat history for user {target_user_id}")
+        await channel_log(bot_instance, update, "/history", f"Admin requested chat history for user {target_user_id}")
         
     except ValueError:
         await update.reply_text("❌ **Error**: User ID must be a valid integer.")
     except Exception as e:
         logger.error(f"Error retrieving chat history: {e}")
         await update.reply_text(f"❌ **Error retrieving chat history**: {str(e)}")
-        await error_log(bot, "HISTORY_COMMAND", str(e), context=update.text, user_id=update.from_user.id)
+        await error_log(bot_instance, "HISTORY_COMMAND", str(e), context=update.text, user_id=update.from_user.id)
 
-@advAiBot.on_message(filters.text & filters.private & filters.user(config.ADMINS))
-async def handle_admin_text_input(bot, message):
+# @bot.on_message(filters.text & filters.private & filters.user(config.ADMINS)) # Commented out Pyrogram handler
+async def handle_admin_text_input(bot_instance, message): # Renamed bot to bot_instance
     """Handler for admin text input, including user ID for history search"""
     # Check if the user is awaiting user ID input for history
     from modules.core.database import get_session_collection
@@ -892,10 +847,10 @@ async def handle_admin_text_input(bot, message):
                 
                 # Call the function to get user chat history
                 from modules.admin.user_history import get_user_chat_history
-                await get_user_chat_history(bot, message, target_user_id, status_msg)
+                await get_user_chat_history(bot_instance, message, target_user_id, status_msg)
                 
                 # Log this admin action
-                await channel_log(bot, message, "history_search", f"Admin searched chat history for user {target_user_id}")
+                await channel_log(bot_instance, message, "history_search", f"Admin searched chat history for user {target_user_id}")
                 
             except ValueError:
                 await message.reply_text("❌ **Error**: User ID must be a valid integer.")
@@ -918,12 +873,41 @@ async def handle_admin_text_input(bot, message):
         logger.error(f"Error in admin text input handler: {e}")
     
     # If we reach here, it's not a special admin action, so proceed with normal message handling
-    await handle_message(bot, message)
+    await handle_message(bot_instance, message) # Pass bot_instance
+
+async def main():
+    # Initialize other startup tasks if needed here
+    # For example, register handlers with dp:
+    # dp.message.register(start_command, Command(commands=["start"]))
+    # dp.message.register(help_command, Command(commands=["help"]))
+    # ... and so on for other handlers
+
+    # Check for restart marker file
+    # Ensure check_restart_marker is compatible with Aiogram's bot object or adapted later.
+    if not hasattr(bot, "_restart_checked"): 
+        logger.info("Checking for restart marker...")
+        await check_restart_marker(bot) 
+        setattr(bot, "_restart_checked", True)
+        logger.info("Restart marker check complete.")
+    
+    # Start the cleanup schedulers
+    global cleanup_scheduler_task, ongoing_generations_cleanup_task, ai_ongoing_generations_cleanup_task
+    
+    cleanup_scheduler_task = asyncio.create_task(cleanup_scheduler())
+    logger.info("Started image generation cleanup scheduler task")
+        
+    ongoing_generations_cleanup_task = asyncio.create_task(cleanup_ongoing_generations())
+    logger.info("Started inline generations cleanup scheduler task")
+        
+    ai_ongoing_generations_cleanup_task = asyncio.create_task(ai_cleanup_ongoing_generations())
+    logger.info("Started inline AI generations cleanup scheduler task")
+
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
     # Print startup message
-    logger.info("🤖 Advanced AI Telegram Bot starting...")
-    print("🤖 Advanced AI Telegram Bot starting...")
+    logger.info("🤖 Advanced AI Telegram Bot starting with Aiogram...")
+    print("🤖 Advanced AI Telegram Bot starting with Aiogram...")
     print("✨ Optimized for performance and modern UI")
     
     # Create global variables for the cleanup tasks
@@ -931,5 +915,4 @@ if __name__ == "__main__":
     ongoing_generations_cleanup_task = None
     ai_ongoing_generations_cleanup_task = None
     
-    # Run the bot
-    advAiBot.run()
+    asyncio.run(main())
