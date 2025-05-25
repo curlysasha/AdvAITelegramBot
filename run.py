@@ -74,12 +74,11 @@ logger.addHandler(stream_handler)
 # module_logger = logging.getLogger(__name__)
 # module_logger.info("This is a test from module_logger") # This will now use the root logger's handlers and level.
 
-
-# Initialize the Pyrogram client with improved session handling
+print(f"DEBUG: BOT_TOKEN value is '{config.BOT_TOKEN}'") 
 advAiBot = pyrogram.Client(
-    "AdvChatGptBotV2", 
-    bot_token=config.BOT_TOKEN, 
-    api_id=None, 
+    name="AdvChatGptBotV2",  # This specifies the session filename
+    bot_token=config.BOT_TOKEN,
+    api_id=None,
     api_hash=None,
     workdir="sessions"
 )
