@@ -12,7 +12,7 @@ START_TIME = time.time()
 
 #Preferences os >> env >> default
 
-BOT_TOKEN = os.environ.get('BOT_TOKEN ') or os.getenv("BOT_TOKEN") or   "BOT_TOKEN"
+BOT_TOKEN = os.environ.get('BOT_TOKEN') or os.getenv("BOT_TOKEN") or "BOT_TOKEN"
 ADMINS=[]
 ADMINS = os.environ.get('ADMIN_IDS') or os.getenv("ADMIN_IDS") or "123456789"
 ADMINS = ADMINS.split(",") # Split the string and convert it to list
@@ -38,4 +38,3 @@ if not OWNER_ID.isdigit():
 ADMINS = list(map(int, ADMINS))
 OWNER_ID = int(OWNER_ID)
 BOT_NAME = os.environ.get('BOT_NAME') or os.getenv("BOT_NAME") or "Adance AI ChatBot"
-
