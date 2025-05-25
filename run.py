@@ -1,4 +1,5 @@
 import os
+import sys
 import config
 import pyrogram
 import time
@@ -46,12 +47,25 @@ if not os.path.exists("logs"):
 
 # Configure logging with a single main log file
 MAIN_LOG_FILE = os.path.join("logs", "bot_main.log")
+
+# Create handlers
+rotating_file_handler = RotatingFileHandler(MAIN_LOG_FILE, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8')
+stream_handler = logging.StreamHandler(stream=sys.stdout) # Explicitly use sys.stdout
+stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+# Attempt to set encoding for stream_handler if possible, though it might be ignored for console
+try:
+    stream_handler.encoding = 'utf-8'
+except AttributeError:
+    # If direct encoding setting is not available, rely on environment (PYTHONIOENCODING)
+    # or accept platform default for console, file log will still be utf-8
+    pass 
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        RotatingFileHandler(MAIN_LOG_FILE, maxBytes=10*1024*1024, backupCount=5),
-        logging.StreamHandler()
+        rotating_file_handler,
+        stream_handler
     ]
 )
 logger = logging.getLogger(__name__)
@@ -61,8 +75,8 @@ logger = logging.getLogger(__name__)
 advAiBot = pyrogram.Client(
     "AdvChatGptBotV2", 
     bot_token=config.BOT_TOKEN, 
-    api_id=config.API_KEY, 
-    api_hash=config.API_HASH,
+    api_id=None, 
+    api_hash=None,
     workdir="sessions"
 )
 
