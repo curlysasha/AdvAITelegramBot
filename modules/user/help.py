@@ -1,13 +1,15 @@
-import pyrogram
-from pyrogram import filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.types import Message
-from pyrogram.types import InlineQuery
-from pyrogram.types import CallbackQuery
-from modules.lang import async_translate_to_lang, batch_translate, translate_ui_element
+from aiogram import types, F, Router, Bot
+from aiogram.filters import Command
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+# Assuming these modules are or will be Aiogram-compatible
+from modules.lang import async_translate_to_lang, batch_translate, translate_ui_element 
 from modules.chatlogs import channel_log
+# import database.user_db as user_db # Not directly used in this file, but good to keep if sub-functions use it implicitly
 
+help_router = Router()
 
+# --- Help Text Constants (remain the same) ---
 help_text = """
 ✨ **ADVANCED AI BOT - HELP CENTER** ✨
 
@@ -141,7 +143,7 @@ quick_start_help = """
    • Bot will extract and analyze
 
 **USEFUL COMMANDS:**
-• `/start` - Main menu
+• `/start` - Main menu (or use "main_menu" callback)
 • `/help` - This help center
 • `/settings` - Configure bot preferences
 • `/new` - Clear conversation history
@@ -150,12 +152,12 @@ quick_start_help = """
 • Select the Support button from main menu
 • Try more specific prompts for better results
 """
+# --- End of Help Text Constants ---
 
-
-async def help(client, message):
+@help_router.message(Command("help"))
+async def help_command(message: types.Message, bot: Bot): # Added bot: Bot
     user_id = message.from_user.id
     
-    # Translate help text and button labels
     texts_to_translate = [
         help_text, 
         "🧠 AI Chat", 
@@ -166,38 +168,39 @@ async def help(client, message):
         "📋 Commands"
     ]
     
+    # Assuming batch_translate is compatible or will be adapted
     translated_texts = await batch_translate(texts_to_translate, user_id)
     
-    translated_help = translated_texts[0]
-    ai_btn = translated_texts[1]
-    img_btn = translated_texts[2]
-    voice_btn = translated_texts[3]
-    analysis_btn = translated_texts[4]
-    quickstart_btn = translated_texts[5]
-    cmd_btn = translated_texts[6]
+    translated_help_text = translated_texts[0]
+    ai_btn_text = translated_texts[1]
+    img_btn_text = translated_texts[2]
+    voice_btn_text = translated_texts[3]
+    analysis_btn_text = translated_texts[4]
+    quickstart_btn_text = translated_texts[5]
+    cmd_btn_text = translated_texts[6]
     
-    # Create interactive keyboard with feature categories
-    # No back button when accessed directly through /help command
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(ai_btn, callback_data="help_ai")],
-        [InlineKeyboardButton(img_btn, callback_data="help_img")],
-        [InlineKeyboardButton(voice_btn, callback_data="help_voice")],
-        [InlineKeyboardButton(analysis_btn, callback_data="help_analysis")],
-        [InlineKeyboardButton(quickstart_btn, callback_data="help_quickstart")],
-        [InlineKeyboardButton(cmd_btn, callback_data="commands")]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=ai_btn_text, callback_data="help_ai")],
+        [InlineKeyboardButton(text=img_btn_text, callback_data="help_img")],
+        [InlineKeyboardButton(text=voice_btn_text, callback_data="help_voice")],
+        [InlineKeyboardButton(text=analysis_btn_text, callback_data="help_analysis")],
+        [InlineKeyboardButton(text=quickstart_btn_text, callback_data="help_quickstart")],
+        [InlineKeyboardButton(text=cmd_btn_text, callback_data="commands")] # Assuming "commands" callback exists elsewhere
     ])
     
-    await client.send_message(
-        chat_id=message.chat.id,
-        text=translated_help,
+    await message.answer(
+        text=translated_help_text,
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
+    # Assuming channel_log is compatible or will be adapted
+    await channel_log(bot, message, "/help")
 
-async def help_inline(bot, callback):
-    user_id = callback.from_user.id
+
+@help_router.callback_query(F.data == "help")
+async def help_menu_callback(callback_query: types.CallbackQuery, bot: Bot): # Added bot: Bot
+    user_id = callback_query.from_user.id
     
-    # Translate help text and button labels
     texts_to_translate = [
         help_text, 
         "🧠 AI Chat", 
@@ -206,75 +209,64 @@ async def help_inline(bot, callback):
         "🔍 Image Analysis",
         "🚀 Quick Start",
         "📋 Commands",
-        "🔙 Back"
+        "🔙 Back" # Standard back button text
     ]
     
     translated_texts = await batch_translate(texts_to_translate, user_id)
     
-    translated_help = translated_texts[0]
-    ai_btn = translated_texts[1]
-    img_btn = translated_texts[2]
-    voice_btn = translated_texts[3]
-    analysis_btn = translated_texts[4]
-    quickstart_btn = translated_texts[5]
-    cmd_btn = translated_texts[6]
-    back_btn = translated_texts[7]
+    translated_help_text = translated_texts[0]
+    ai_btn_text = translated_texts[1]
+    img_btn_text = translated_texts[2]
+    voice_btn_text = translated_texts[3]
+    analysis_btn_text = translated_texts[4]
+    quickstart_btn_text = translated_texts[5]
+    cmd_btn_text = translated_texts[6]
+    back_btn_text = translated_texts[7]
     
-    # Create interactive keyboard with feature categories
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(ai_btn, callback_data="help_ai")],
-        [InlineKeyboardButton(img_btn, callback_data="help_img")],
-        [InlineKeyboardButton(voice_btn, callback_data="help_voice")],
-        [InlineKeyboardButton(analysis_btn, callback_data="help_analysis")],
-        [InlineKeyboardButton(quickstart_btn, callback_data="help_quickstart")],
-        [InlineKeyboardButton(cmd_btn, callback_data="commands")],
-        [InlineKeyboardButton(back_btn, callback_data="back")]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=ai_btn_text, callback_data="help_ai")],
+        [InlineKeyboardButton(text=img_btn_text, callback_data="help_img")],
+        [InlineKeyboardButton(text=voice_btn_text, callback_data="help_voice")],
+        [InlineKeyboardButton(text=analysis_btn_text, callback_data="help_analysis")],
+        [InlineKeyboardButton(text=quickstart_btn_text, callback_data="help_quickstart")],
+        [InlineKeyboardButton(text=cmd_btn_text, callback_data="commands")], # Assuming "commands" callback
+        [InlineKeyboardButton(text=back_btn_text, callback_data="main_menu")] # Callback to main menu (from start.py)
     ])
 
-    await bot.edit_message_text(
-        chat_id=callback.message.chat.id,
-        message_id=callback.message.id,
-        text=translated_help,
+    await callback_query.message.edit_text(
+        text=translated_help_text,
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
+    await callback_query.answer()
 
-    await callback.answer()
-    return
     
-async def handle_help_category(client, callback):
-    user_id = callback.from_user.id
-    callback_data = callback.data
+@help_router.callback_query(F.data.startswith("help_"))
+async def help_category_callback(callback_query: types.CallbackQuery, bot: Bot): # Added bot: Bot
+    user_id = callback_query.from_user.id
+    data = callback_query.data
     
-    help_content = help_text  # Default
-    if callback_data == "help_ai":
-        help_content = ai_chat_help
-    elif callback_data == "help_img":
-        help_content = image_gen_help
-    elif callback_data == "help_voice":
-        help_content = voice_features_help
-    elif callback_data == "help_analysis":
-        help_content = image_analysis_help
-    elif callback_data == "help_quickstart":
-        help_content = quick_start_help
+    content_map = {
+        "help_ai": ai_chat_help,
+        "help_img": image_gen_help,
+        "help_voice": voice_features_help,
+        "help_analysis": image_analysis_help,
+        "help_quickstart": quick_start_help,
+    }
     
-    # Translate the selected help content
-    translated_text = await async_translate_to_lang(help_content, user_id)
-    back_btn = await translate_ui_element("🔙 Back to Help Menu", user_id)
+    help_content_to_translate = content_map.get(data, help_text) # Default to main help_text if not found
     
-    # Use "help" as callback_data to return to main help menu
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(back_btn, callback_data="help")]
+    # Assuming async_translate_to_lang and translate_ui_element are compatible
+    translated_text = await async_translate_to_lang(help_content_to_translate, user_id)
+    back_btn_text = await translate_ui_element("🔙 Back to Help Menu", user_id)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=back_btn_text, callback_data="help")] # Callback to main help menu
     ])
     
-    await client.edit_message_text(
-        chat_id=callback.message.chat.id,
-        message_id=callback.message.id,
+    await callback_query.message.edit_text(
         text=translated_text,
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
-    
-    await callback.answer()
-    return
-    
+    await callback_query.answer()

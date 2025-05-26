@@ -1,152 +1,135 @@
+from aiogram import types, F, Router, Bot
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
 from pymongo import MongoClient
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from modules.lang import async_translate_to_lang
-
 from config import DATABASE_URL
+# Assuming these lang functions are/will be Aiogram compatible
+from modules.lang import async_translate_to_lang 
 
-# Initialize the MongoDB client
-mongo_client = MongoClient(DATABASE_URL)
+# Router for assistant/mode settings
+assistant_settings_router = Router()
 
-# Access or create the database and collection
-db = mongo_client['aibotdb']
+# MongoDB Client
+# Consider moving DB initialization to a central place if not already done.
+client = MongoClient(DATABASE_URL)
+db = client["aibotdb"]
 ai_mode_collection = db['ai_mode']
 
-# Dictionary of modes with labels
+# Dictionary of modes with labels (ensure this is the single source of truth or imported)
 modes = {
-    "chatbot": "Chatbot",
-    "coder": "Coder/Developer",
-    "professional": "Professional",
-    "teacher": "Teacher",
-    "therapist": "Therapist",
-    "assistant": "Personal Assistant",
-    "gamer": "Gamer",
-    "translator": "Translator"
+    "chatbot": "Chatbot", "coder": "Coder/Developer", "professional": "Professional",
+    "teacher": "Teacher", "therapist": "Therapist", "assistant": "Personal Assistant",
+    "gamer": "Gamer", "translator": "Translator"
 }
 
-# Function to handle settings assistant callback
-async def settings_assistant_callback(client, callback):
-    user_id = callback.from_user.id
+# Display assistant mode selection menu
+@assistant_settings_router.callback_query(F.data == "settings_assistant_menu") 
+async def assistant_settings_menu_callback(callback_query: types.CallbackQuery, bot: Bot): 
+    user_id = callback_query.from_user.id
     
-    # Fetch the user's current mode from the database
+    # Fetch current mode from DB
+    # These DB calls are synchronous. For a fully async app, consider an async driver like Motor.
     user_mode_doc = ai_mode_collection.find_one({"user_id": user_id})
-    if user_mode_doc:
-        current_mode = user_mode_doc['mode']
-    else:
-        current_mode = "chatbot"
-        ai_mode_collection.insert_one({"user_id": user_id, "mode": current_mode})
+    current_mode_code = user_mode_doc['mode'] if user_mode_doc and 'mode' in user_mode_doc else "chatbot"
+    current_mode_label = modes.get(current_mode_code, "Chatbot") 
     
-    current_mode_label = modes[current_mode]
-    
-    # Translate message text
-    current_mode_text = await async_translate_to_lang("Current mode:", user_id)
-    current_mode_translated = await async_translate_to_lang(current_mode_label, user_id)
-    message_text = f"{current_mode_text} {current_mode_translated}"
+    # Translate "Current mode:" and the current mode's label
+    # User's current language should be fetched for accurate translation.
+    # Assuming async_translate_to_lang(text, user_id) handles language fetching.
+    current_mode_intro_translated = await async_translate_to_lang("Current mode:", user_id)
+    current_mode_label_translated = await async_translate_to_lang(current_mode_label, user_id)
+    message_text = f"{current_mode_intro_translated} **{current_mode_label_translated}**"
 
     # Translate button labels
-    chatbot_text = await async_translate_to_lang("🤖 Chatbot", user_id)
-    coder_text = await async_translate_to_lang("💻 Coder/Developer", user_id)
-    professional_text = await async_translate_to_lang("👔 Professional", user_id)
-    teacher_text = await async_translate_to_lang("📚 Teacher", user_id)
-    therapist_text = await async_translate_to_lang("🩺 Therapist", user_id)
-    assistant_text = await async_translate_to_lang("📝 Assistant", user_id)
-    gamer_text = await async_translate_to_lang("🎮 Gamer", user_id)
-    translator_text = await async_translate_to_lang("🌐 Translator", user_id)
-    back_btn = await async_translate_to_lang("🔙 Back", user_id)
+    buttons_texts_to_translate = {
+        "chatbot": "🤖 Chatbot", "coder": "💻 Coder/Developer", "professional": "👔 Professional",
+        "teacher": "📚 Teacher", "therapist": "🩺 Therapist", "assistant": "📝 Assistant",
+        "gamer": "🎮 Gamer", "translator": "🌐 Translator", "back": "🔙 Back"
+    }
+    
+    translated_button_labels = {}
+    for key, text in buttons_texts_to_translate.items():
+        translated_button_labels[key] = await async_translate_to_lang(text, user_id)
 
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(chatbot_text, callback_data="mode_chatbot"),
-                InlineKeyboardButton(coder_text, callback_data="mode_coder")
-            ],
-            [
-                InlineKeyboardButton(professional_text, callback_data="mode_professional"),
-                InlineKeyboardButton(teacher_text, callback_data="mode_teacher")
-            ],
-            [
-                InlineKeyboardButton(therapist_text, callback_data="mode_therapist"),
-                InlineKeyboardButton(assistant_text, callback_data="mode_assistant")
-            ],
-            [
-                InlineKeyboardButton(gamer_text, callback_data="mode_gamer"),
-                InlineKeyboardButton(translator_text, callback_data="mode_translator")
-            ],
-            [
-                InlineKeyboardButton(back_btn, callback_data="settings_back")
-            ]
-        ]
-    )
+    # Create keyboard with mode options
+    keyboard_buttons = []
+    mode_keys = list(modes.keys())
+    for i in range(0, len(mode_keys), 2):
+        row = []
+        row.append(InlineKeyboardButton(text=translated_button_labels[mode_keys[i].lower()], callback_data=f"set_mode_{mode_keys[i]}"))
+        if i + 1 < len(mode_keys):
+            row.append(InlineKeyboardButton(text=translated_button_labels[mode_keys[i+1].lower()], callback_data=f"set_mode_{mode_keys[i+1]}"))
+        keyboard_buttons.append(row)
+    
+    keyboard_buttons.append([InlineKeyboardButton(text=translated_button_labels["back"], callback_data="settings")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
-    await callback.message.edit(
+    await callback_query.message.edit_text(
         text=message_text,
         reply_markup=keyboard,
-        disable_web_page_preview=True
+        disable_web_page_preview=True,
+        parse_mode="Markdown" 
     )
+    await callback_query.answer()
 
-# Function to handle mode setting change
-async def change_mode_setting(client, callback):
-    mode = callback.data.split("_")[1]
-    user_id = callback.from_user.id
+# Handle assistant mode change
+@assistant_settings_router.callback_query(F.data.startswith("set_mode_")) 
+async def change_assistant_mode_callback(callback_query: types.CallbackQuery, bot: Bot): 
+    user_id = callback_query.from_user.id
+    new_mode_code = callback_query.data.split("_")[2] 
 
-    # Update the user's mode in the database
     ai_mode_collection.update_one(
         {"user_id": user_id},
-        {"$set": {"mode": mode}},
+        {"$set": {"mode": new_mode_code}},
         upsert=True
     )
 
-    current_mode_label = modes[mode]
+    current_mode_label = modes.get(new_mode_code, "Chatbot")
     
-    # Translate message text
-    current_mode_text = await async_translate_to_lang("Current mode:", user_id)
-    current_mode_translated = await async_translate_to_lang(current_mode_label, user_id)
-    message_text = f"{current_mode_text} {current_mode_translated}"
+    # Fetch user's current language for translations
+    # This part is crucial: if language settings are in a different module, how do we get current lang?
+    # Assuming async_translate_to_lang handles it by user_id.
+    current_mode_intro_translated = await async_translate_to_lang("Current mode:", user_id)
+    current_mode_label_translated = await async_translate_to_lang(current_mode_label, user_id)
+    message_text = f"{current_mode_intro_translated} **{current_mode_label_translated}**"
+    
+    alert_text_translated = await async_translate_to_lang("Assistant mode updated!", user_id)
 
-    # Translate button labels
-    chatbot_text = await async_translate_to_lang("🤖 Chatbot", user_id)
-    coder_text = await async_translate_to_lang("💻 Coder/Developer", user_id)
-    professional_text = await async_translate_to_lang("👔 Professional", user_id)
-    teacher_text = await async_translate_to_lang("📚 Teacher", user_id)
-    therapist_text = await async_translate_to_lang("🩺 Therapist", user_id)
-    assistant_text = await async_translate_to_lang("📝 Assistant", user_id)
-    gamer_text = await async_translate_to_lang("🎮 Gamer", user_id)
-    translator_text = await async_translate_to_lang("🌐 Translator", user_id)
-    back_btn = await async_translate_to_lang("🔙 Back", user_id)
+    buttons_texts_to_translate = {
+        "chatbot": "🤖 Chatbot", "coder": "💻 Coder/Developer", "professional": "👔 Professional",
+        "teacher": "📚 Teacher", "therapist": "🩺 Therapist", "assistant": "📝 Assistant",
+        "gamer": "🎮 Gamer", "translator": "🌐 Translator", "back": "🔙 Back"
+    }
+    
+    translated_button_labels = {}
+    for key, text in buttons_texts_to_translate.items():
+        translated_button_labels[key] = await async_translate_to_lang(text, user_id)
+    
+    keyboard_buttons = []
+    mode_keys = list(modes.keys())
+    for i in range(0, len(mode_keys), 2):
+        row = []
+        row.append(InlineKeyboardButton(text=translated_button_labels[mode_keys[i].lower()], callback_data=f"set_mode_{mode_keys[i]}"))
+        if i + 1 < len(mode_keys):
+            row.append(InlineKeyboardButton(text=translated_button_labels[mode_keys[i+1].lower()], callback_data=f"set_mode_{mode_keys[i+1]}"))
+        keyboard_buttons.append(row)
+        
+    keyboard_buttons.append([InlineKeyboardButton(text=translated_button_labels["back"], callback_data="settings")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(chatbot_text, callback_data="mode_chatbot"),
-                InlineKeyboardButton(coder_text, callback_data="mode_coder")
-            ],
-            [
-                InlineKeyboardButton(professional_text, callback_data="mode_professional"),
-                InlineKeyboardButton(teacher_text, callback_data="mode_teacher")
-            ],
-            [
-                InlineKeyboardButton(therapist_text, callback_data="mode_therapist"),
-                InlineKeyboardButton(assistant_text, callback_data="mode_assistant")
-            ],
-            [
-                InlineKeyboardButton(gamer_text, callback_data="mode_gamer"),
-                InlineKeyboardButton(translator_text, callback_data="mode_translator")
-            ],
-            [
-                InlineKeyboardButton(back_btn, callback_data="settings_back")
-            ]
-        ]
-    )
-
-    await callback.message.edit(
+    await callback_query.message.edit_text(
         text=message_text,
         reply_markup=keyboard,
-        disable_web_page_preview=True
+        disable_web_page_preview=True,
+        parse_mode="Markdown"
     )
+    await callback_query.answer(alert_text_translated)
 
-def current_mode(user_id):
+# Synchronous helper function (consider making async or moving to a db utility module)
+def get_current_ai_mode(user_id: int) -> str: 
     user_mode_doc = ai_mode_collection.find_one({"user_id": user_id})
-    if user_mode_doc:
+    if user_mode_doc and 'mode' in user_mode_doc:
         return user_mode_doc['mode']
-    else:
-        return "chatbot"
+    # Default to "chatbot" and optionally store it if not found
+    # ai_mode_collection.update_one({"user_id": user_id}, {"$set": {"mode": "chatbot"}}, upsert=True)
+    return "chatbot"

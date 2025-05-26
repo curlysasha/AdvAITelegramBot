@@ -1,129 +1,121 @@
+from aiogram import types, F, Router, Bot
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
 from pymongo import MongoClient
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import DATABASE_URL
-from modules.lang import async_translate_to_lang
+# Assuming these lang functions are/will be Aiogram compatible
+from modules.lang import async_translate_to_lang # batch_translate, translate_ui_element not used here
 
-# Initialize the MongoDB client
-mongo_client = MongoClient(DATABASE_URL)
+# Router for language settings
+lang_settings_router = Router()
 
-# Access or create the database and collection
-db = mongo_client['aibotdb']
+# MongoDB Client
+client = MongoClient(DATABASE_URL)
+db = client["aibotdb"]
 user_lang_collection = db['user_lang']
 
-# Dictionary of languages with flags
+# Dictionary of languages with flags (ensure this is the single source of truth or imported)
 languages = {
-    "en": "🇬🇧 English",
-    "hi": "🇮🇳 Hindi",
-    "zh": "🇨🇳 Chinese",
-    "ar": "🇸🇦 Arabic",
-    "fr": "🇫🇷 French",
-    "ru": "🇷🇺 Russian"
+    "en": "🇬🇧 English", "hi": "🇮🇳 Hindi", "zh": "🇨🇳 Chinese",
+    "ar": "🇸🇦 Arabic", "fr": "🇫🇷 French", "ru": "🇷🇺 Russian"
 }
 
-# Function to handle settings language callback
-async def settings_langs_callback(client, callback):
-    user_id = callback.from_user.id
+# Display language selection menu
+@lang_settings_router.callback_query(F.data == "settings_languages_menu") # Renamed from "settings_lans"
+async def language_selection_menu_callback(callback_query: types.CallbackQuery, bot: Bot): # bot: Bot might not be needed
+    user_id = callback_query.from_user.id
     
-    # Fetch the user's current language from the database
     user_lang_doc = user_lang_collection.find_one({"user_id": user_id})
-    if user_lang_doc:
-        current_language = user_lang_doc['language']
-    else:
-        current_language = "en"
-        user_lang_collection.insert_one({"user_id": user_id, "language": current_language})
-
-    current_language_label = languages[current_language]
+    current_language_code = user_lang_doc['language'] if user_lang_doc and 'language' in user_lang_doc else "en"
     
-    # Translate current language text
-    current_lang_text = await async_translate_to_lang("Current language:", user_id)
-    message_text = f"{current_lang_text} {current_language_label}"
+    current_language_label = languages.get(current_language_code, "Unknown")
+    
+    # Translate "Current language:" text
+    # Pass current_language_code to ensure translation happens in the user's currently selected language
+    current_lang_text_translated = await async_translate_to_lang("Current language:", lang=current_language_code)
+    message_text = f"{current_lang_text_translated} **{current_language_label}**"
 
-    # No need to translate language names as they're always displayed in their native form
-    # But translate the Back button
-    back_btn = await async_translate_to_lang("🔙 Back", user_id)
+    # Translate "Back" button text
+    back_btn_text_translated = await async_translate_to_lang("🔙 Back", lang=current_language_code)
 
-    keyboard = InlineKeyboardMarkup(
+    # Create keyboard with language options
+    # Buttons show flag and language name (not translated, as per original logic)
+    # Callback data normalized to "set_lang_{code}"
+    keyboard_buttons = [
         [
-            [
-                InlineKeyboardButton("🇮🇳 Hindi", callback_data="language_hi"),
-                InlineKeyboardButton("🇬🇧 English", callback_data="language_en")
-            ],
-            [
-                InlineKeyboardButton("🇨🇳 Chinese", callback_data="language_zh"),
-                InlineKeyboardButton("🇸🇦 Arabic", callback_data="language_ar")
-            ],
-            [
-                InlineKeyboardButton("🇫🇷 French", callback_data="language_fr"),
-                InlineKeyboardButton("🇷🇺 Russian", callback_data="language_ru")
-            ],
-            [
-                InlineKeyboardButton(back_btn, callback_data="settings_back")
-            ]
+            InlineKeyboardButton(text="🇮🇳 Hindi", callback_data="set_lang_hi"),
+            InlineKeyboardButton(text="🇬🇧 English", callback_data="set_lang_en")
+        ],
+        [
+            InlineKeyboardButton(text="🇨🇳 Chinese", callback_data="set_lang_zh"),
+            InlineKeyboardButton(text="🇸🇦 Arabic", callback_data="set_lang_ar")
+        ],
+        [
+            InlineKeyboardButton(text="🇫🇷 French", callback_data="set_lang_fr"),
+            InlineKeyboardButton(text="🇷🇺 Russian", callback_data="set_lang_ru")
+        ],
+        [
+            InlineKeyboardButton(text=back_btn_text_translated, callback_data="settings") # Back to main settings
         ]
-    )
+    ]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
-    await callback.message.edit(
+    await callback_query.message.edit_text(
         text=message_text,
         reply_markup=keyboard,
-        disable_web_page_preview=True
+        disable_web_page_preview=True,
+        parse_mode="Markdown" # For the bold current language
     )
+    await callback_query.answer()
 
-# Function to handle language setting change
-async def change_language_setting(client, callback):
-    user_id = callback.from_user.id
-    new_language = callback.data.split("_")[1]
+# Handle language change
+@lang_settings_router.callback_query(F.data.startswith("set_lang_")) # Renamed from "language_"
+async def change_language_setting_callback(callback_query: types.CallbackQuery, bot: Bot): # bot: Bot might not be needed
+    user_id = callback_query.from_user.id
+    new_language_code = callback_query.data.split("_")[2] # e.g., "en" from "set_lang_en"
 
-    # Update the user's language in the database
     user_lang_collection.update_one(
         {"user_id": user_id},
-        {"$set": {"language": new_language}},
+        {"$set": {"language": new_language_code}},
         upsert=True
     )
 
-    current_language_label = languages[new_language]
+    current_language_label = languages.get(new_language_code, "Unknown")
     
-    # Translate current language text 
-    # Note: We translate using the NEW language setting
-    current_lang_text = await async_translate_to_lang("Current language:", lang=new_language)
-    message_text = f"{current_lang_text} {current_language_label}"
+    # Translate "Current language:" and "Back" button using the NEW language
+    current_lang_text_translated = await async_translate_to_lang("Current language:", lang=new_language_code)
+    message_text = f"{current_lang_text_translated} **{current_language_label}**"
+    
+    back_btn_text_translated = await async_translate_to_lang("🔙 Back", lang=new_language_code)
+    alert_text_translated = await async_translate_to_lang("Language updated!", lang=new_language_code)
 
-    # No need to translate language names as they're always displayed in their native form
-    # But translate the Back button using the new language
-    back_btn = await async_translate_to_lang("🔙 Back", lang=new_language)
 
-    keyboard = InlineKeyboardMarkup(
+    keyboard_buttons = [
         [
-            [
-                InlineKeyboardButton("🇮🇳 Hindi", callback_data="language_hi"),
-                InlineKeyboardButton("🇬🇧 English", callback_data="language_en")
-            ],
-            [
-                InlineKeyboardButton("🇨🇳 Chinese", callback_data="language_zh"),
-                InlineKeyboardButton("🇸🇦 Arabic", callback_data="language_ar")
-            ],
-            [
-                InlineKeyboardButton("🇫🇷 French", callback_data="language_fr"),
-                InlineKeyboardButton("🇷🇺 Russian", callback_data="language_ru")
-            ],
-            [
-                InlineKeyboardButton(back_btn, callback_data="settings_back")
-            ]
+            InlineKeyboardButton(text="🇮🇳 Hindi", callback_data="set_lang_hi"),
+            InlineKeyboardButton(text="🇬🇧 English", callback_data="set_lang_en")
+        ],
+        [
+            InlineKeyboardButton(text="🇨🇳 Chinese", callback_data="set_lang_zh"),
+            InlineKeyboardButton(text="🇸🇦 Arabic", callback_data="set_lang_ar")
+        ],
+        [
+            InlineKeyboardButton(text="🇫🇷 French", callback_data="set_lang_fr"),
+            InlineKeyboardButton(text="🇷🇺 Russian", callback_data="set_lang_ru")
+        ],
+        [
+            InlineKeyboardButton(text=back_btn_text_translated, callback_data="settings") # Back to main settings
         ]
-    )
+    ]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
-    await callback.message.edit(
+    await callback_query.message.edit_text(
         text=message_text,
         reply_markup=keyboard,
-        disable_web_page_preview=True
+        disable_web_page_preview=True,
+        parse_mode="Markdown"
     )
+    await callback_query.answer(alert_text_translated)
 
-
-languages = {
-    "en": "🇬🇧 English",
-    "hi": "🇮🇳 Hindi",
-    "zh": "🇨🇳 Chinese",
-    "ar": "🇸🇦 Arabic",
-    "fr": "🇫🇷 French",
-    "ru": "🇷🇺 Russian"
-}
+# The languages dictionary was duplicated at the end of the original file. 
+# It's defined once at the top here.
