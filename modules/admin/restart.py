@@ -3,185 +3,175 @@ import sys
 import logging
 import asyncio
 import time
-from pyrogram import Client
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from config import ADMINS
+
+from aiogram import types, F, Router, Bot
+from aiogram.filters import Command
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+# Assuming IsAdminFilter is in filters.admin_filters and ADMINS is in config
+from filters.admin_filters import IsAdminFilter 
 
 logger = logging.getLogger(__name__)
+restart_router = Router()
 
-async def restart_command(client: Client, message: Message):
-    """
-    Handle the restart command - only for admin users
-    Safely stops and restarts the bot
-    """
-    # Check if user is admin
-    if message.from_user.id not in ADMINS:
-        await message.reply(
-            "⛔ **Access Denied**\n\n"
-            "Only bot administrators can use this command."
-        )
-        logger.warning(f"Non-admin user {message.from_user.id} attempted to use restart command")
-        return
-    
-    # Get username or first name for personalized message
+RESTART_MARKER_FILE = "restart_marker.txt" # Define at module level
+
+@restart_router.message(Command("restart"), IsAdminFilter())
+async def restart_command_handler(message: types.Message, bot: Bot): # bot: Bot is not used but good practice
     user_name = message.from_user.username or message.from_user.first_name
     
-    # Create restart keyboard with confirmation
-    restart_keyboard = InlineKeyboardMarkup([
+    restart_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton("✅ Yes, Restart Now", callback_data="confirm_restart"),
-            InlineKeyboardButton("❌ Cancel", callback_data="cancel_restart")
+            InlineKeyboardButton(text="✅ Yes, Restart Now", callback_data="confirm_restart"),
+            InlineKeyboardButton(text="❌ Cancel", callback_data="cancel_restart")
         ]
     ])
     
-    # Send confirmation message
-    await message.reply(
+    await message.answer(
         f"🔄 **Restart Confirmation**\n\n"
         f"Are you sure you want to restart the bot, {user_name}?\n\n"
         "All current operations will be interrupted and the bot will be unavailable for a few seconds.",
-        reply_markup=restart_keyboard
+        reply_markup=restart_keyboard,
+        parse_mode="Markdown"
     )
-    
     logger.info(f"Admin {message.from_user.id} requested restart confirmation")
 
-async def handle_restart_callback(client: Client, callback_query):
-    """Handle restart confirmation or cancellation"""
-    # Verify user is admin
-    if callback_query.from_user.id not in ADMINS:
-        await callback_query.answer("You don't have permission to perform this action", show_alert=True)
-        return
-    
+@restart_router.callback_query(F.data.in_({"confirm_restart", "cancel_restart"}), IsAdminFilter())
+async def handle_restart_callback_handler(callback_query: types.CallbackQuery, bot: Bot): # bot: Bot is not used here
+    # IsAdminFilter already applied by the router decorator
+
     if callback_query.data == "confirm_restart":
-        # Update the message to show restart is in progress
-        await callback_query.message.edit_text(
-            "🔄 **Restarting Bot**\n\n"
-            "The bot is shutting down and will restart momentarily...\n\n"
-            "This typically takes 5-10 seconds. Thanks for your patience."
-        )
-        
-        # Log the restart event
+        try:
+            await callback_query.message.edit_text(
+                "🔄 **Restarting Bot**\n\n"
+                "The bot is shutting down and will restart momentarily...\n\n"
+                "This typically takes 5-10 seconds. Thanks for your patience.",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Error editing message for restart confirmation: {e}")
+            # Attempt to send a new message if edit fails
+            try:
+                await callback_query.message.answer(
+                    "🔄 **Restarting Bot**\n\n"
+                    "The bot is shutting down and will restart momentarily...",
+                    parse_mode="Markdown"
+                )
+            except Exception as e_send:
+                 logger.error(f"Error sending new message for restart confirmation: {e_send}")
+
+
         logger.warning(f"Admin {callback_query.from_user.id} initiated bot restart")
-        
-        # Give a moment for the message to be sent
-        await asyncio.sleep(1)
-        
-        # Perform the restart
-        await perform_restart(client, callback_query)
+        await asyncio.sleep(1) 
+        await _perform_restart_logic(callback_query) 
         
     elif callback_query.data == "cancel_restart":
-        # Update the message to show cancellation
-        await callback_query.message.edit_text(
-            "✅ **Restart Cancelled**\n\n"
-            "Bot restart has been cancelled. The bot will continue to run normally."
-        )
+        try:
+            await callback_query.message.edit_text(
+                "✅ **Restart Cancelled**\n\n"
+                "Bot restart has been cancelled. The bot will continue to run normally.",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Error editing message for restart cancellation: {e}")
         logger.info(f"Admin {callback_query.from_user.id} cancelled restart")
-
-async def perform_restart(client: Client, callback_query):
-    """Actually perform the restart operation"""
+    
     try:
-        # Get the path to the bot script
-        script_path = sys.argv[0]  # The main script that was run (should be run.py)
+        await callback_query.answer()
+    except Exception as e:
+        logger.error(f"Error answering callback query for restart: {e}")
+
+
+async def _perform_restart_logic(callback_query: types.CallbackQuery):
+    try:
+        script_path = sys.argv[0]
         logger.info(f"Preparing to restart with script: {script_path}")
         
-        # Create a restart marker file to indicate intentional restart
-        with open("restart_marker.txt", "w") as f:
-            # Format: timestamp,user_id,chat_id,message_id
-            restart_data = f"{time.time()},{callback_query.from_user.id},{callback_query.message.chat.id},{callback_query.message.id}"
+        # Ensure message and chat objects exist before accessing their attributes
+        chat_id_for_marker = callback_query.message.chat.id if callback_query.message and callback_query.message.chat else "unknown_chat"
+        message_id_for_marker = callback_query.message.message_id if callback_query.message else "unknown_message"
+
+        with open(RESTART_MARKER_FILE, "w") as f:
+            restart_data = (f"{time.time()},{callback_query.from_user.id},"
+                            f"{chat_id_for_marker},{message_id_for_marker}")
             f.write(restart_data)
             logger.info(f"Restart marker created with data: {restart_data}")
-            
-            # Make sure restart marker is written to disk before closing
             os.fsync(f.fileno())
         
-        # Log final message before restart
         logger.warning("🔄 BOT RESTARTING NOW...")
-        
-        # Give a moment for all operations to complete
         await asyncio.sleep(1)
         
-        # We can't use await client.stop() here because it causes a deadlock
-        # Instead, we just exit and restart directly
-
-        # Use os.execv to replace the current process with a new one
-        python_executable = sys.executable  # Path to Python interpreter
-        
-        # Close standard file descriptors to ensure clean restart
-        # This helps prevent resource leaks
+        python_executable = sys.executable
         try:
-            # Close non-essential resources
             sys.stdout.flush()
             sys.stderr.flush()
-        except:
-            pass
+        except Exception as e_flush:
+            logger.debug(f"Error flushing stdio during restart: {e_flush}")
             
-        # Execute the restart using os.execv
         os.execv(python_executable, [python_executable, script_path])
         
     except Exception as e:
         error_msg = f"Error during restart: {str(e)}"
         logger.error(error_msg)
-        
-        # Try to notify the admin
-        try:
-            await callback_query.message.edit_text(
-                f"❌ **Restart Failed**\n\n"
-                f"An error occurred while trying to restart: {str(e)}\n\n"
-                f"The bot will continue running, but you may need to restart it manually."
-            )
-        except:
-            # If we can't edit the message, the client might already be closing
-            pass
+        if callback_query.message: # Check if message exists
+            try:
+                await callback_query.message.edit_text(
+                    f"❌ **Restart Failed**\n\n"
+                    f"An error occurred: {str(e)}\n\n"
+                    f"Manual restart may be required.",
+                    parse_mode="Markdown"
+                )
+            except Exception as e_edit_fail:
+                 logger.error(f"Failed to edit message about restart failure: {e_edit_fail}")
 
-async def check_restart_marker(client: Client):
-    """Check if bot was restarted and notify admin who requested it"""
+async def check_restart_marker(bot: Bot): 
     try:
-        # Check if restart marker file exists
-        marker_file = "restart_marker.txt"
-        if not os.path.exists(marker_file):
+        if not os.path.exists(RESTART_MARKER_FILE):
             logger.debug("No restart marker found - normal startup")
             return
             
-        logger.info(f"Restart marker found - processing")
+        logger.info("Restart marker found - processing")
+        
+        with open(RESTART_MARKER_FILE, "r") as f:
+            data = f.read().strip().split(",")
+            
+        if len(data) < 4:
+            logger.warning(f"Restart marker file has invalid format: {data}")
+            os.remove(RESTART_MARKER_FILE)
+            return
+            
+        timestamp_str, user_id_str, chat_id_str, message_id_str = data
+        
+        # Validate chat_id and message_id before trying to use them
+        if chat_id_str == "unknown_chat" or message_id_str == "unknown_message":
+            logger.warning(f"Cannot send restart confirmation due to unknown chat/message ID in marker: {data}")
+            os.remove(RESTART_MARKER_FILE)
+            return
+
+        restarted_at_orig = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(float(timestamp_str)))
+        completed_at_now = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(time.time()))
+
+        logger.info(f"Bot was restarted by admin {user_id_str} at {restarted_at_orig}")
         
         try:
-            # Read the marker file
-            with open(marker_file, "r") as f:
-                data = f.read().strip().split(",")
-                
-            if len(data) < 4:
-                logger.warning(f"Restart marker file has invalid format: {data}")
-                return
-                
-            # Extract data
-            timestamp, user_id, chat_id, message_id = data
-            restart_time = time.strftime('%Y-%m-%d %H:%M:%S', 
-                                       time.localtime(float(timestamp)))
-            
-            logger.info(f"Bot was restarted by admin {user_id} at {restart_time}")
-            
-            # Send confirmation message
-            try:
-                await client.edit_message_text(
-                    chat_id=int(chat_id),
-                    message_id=int(message_id),
-                    text="✅ **Bot Restarted Successfully!**\n\n"
-                         f"Restart initiated at: {restart_time}\n"
-                         f"Restart completed at: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                         "The bot is now fully operational."
-                )
-                logger.info(f"Sent restart confirmation to admin {user_id}")
-            except Exception as e:
-                logger.error(f"Failed to send restart confirmation: {str(e)}")
-                
+            await bot.edit_message_text(
+                chat_id=int(chat_id_str),
+                message_id=int(message_id_str),
+                text=(f"✅ **Bot Restarted Successfully!**\n\n"
+                      f"Restart initiated at: {restarted_at_orig}\n"
+                      f"Restart completed at: {completed_at_now}\n"
+                      f"The bot is now fully operational."),
+                parse_mode="Markdown"
+            )
+            logger.info(f"Sent restart confirmation to admin {user_id_str}")
         except Exception as e:
-            logger.error(f"Error processing restart marker: {str(e)}")
-        
-        # Always delete the marker file, even if there was an error processing it
-        try:
-            os.remove(marker_file)
-            logger.info("Restart marker file deleted")
-        except Exception as e:
-            logger.error(f"Failed to delete restart marker file: {str(e)}")
-            
+            logger.error(f"Failed to send restart confirmation: {str(e)}")
+                
     except Exception as e:
-        logger.error(f"Error checking restart marker: {str(e)}") 
+        logger.error(f"Error processing restart marker: {str(e)}")
+    finally:
+        if os.path.exists(RESTART_MARKER_FILE):
+            try:
+                os.remove(RESTART_MARKER_FILE)
+                logger.info("Restart marker file deleted")
+            except Exception as e_remove:
+                logger.error(f"Failed to delete restart marker file: {e_remove}")

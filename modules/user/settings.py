@@ -1,5 +1,6 @@
 from aiogram import types, F, Router, Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+import asyncio # Required for asyncio.to_thread
 
 from pymongo import MongoClient
 from config import DATABASE_URL
@@ -46,17 +47,35 @@ You can change your settings from below options.
 async def settings_menu_callback(callback_query: types.CallbackQuery, bot: Bot):
     user_id = callback_query.from_user.id
 
-    # Fetch user data (similar to global_settings.py, consider refactoring to user_db.py)
-    user_lang_doc = user_lang_collection.find_one({"user_id": user_id})
+    # Wrapped DB calls for fetching all user settings at once
+    def _fetch_all_user_settings_sync():
+        lang_doc = user_lang_collection.find_one({"user_id": user_id})
+        voice_doc = user_voice_collection.find_one({"user_id": user_id})
+        mode_doc = ai_mode_collection.find_one({"user_id": user_id})
+        return lang_doc, voice_doc, mode_doc
+
+    user_lang_doc, user_voice_doc, user_mode_doc = await asyncio.to_thread(_fetch_all_user_settings_sync)
+    
     current_language_code = user_lang_doc['language'] if user_lang_doc and 'language' in user_lang_doc else "en"
+    # Optionally, if lang_doc is None and current_language_code is 'en', save it:
+    if not user_lang_doc: # Or specifically if language was not found and defaulted
+        def _set_default_lang_sync():
+            user_lang_collection.update_one({"user_id": user_id}, {"$set": {"language": "en"}}, upsert=True)
+        await asyncio.to_thread(_set_default_lang_sync)
     current_language_label = languages.get(current_language_code, "Unknown")
 
-    user_voice_doc = user_voice_collection.find_one({"user_id": user_id})
     voice_setting_value = user_voice_doc.get("voice", "voice") if user_voice_doc and 'voice' in user_voice_doc else "voice"
+    if not user_voice_doc: # Save default if not found
+        def _set_default_voice_sync():
+            user_voice_collection.update_one({"user_id": user_id}, {"$set": {"voice": "voice"}}, upsert=True)
+        await asyncio.to_thread(_set_default_voice_sync)
     voice_setting_label = "Text" if voice_setting_value == "text" else "Voice"
 
-    user_mode_doc = ai_mode_collection.find_one({"user_id": user_id})
     current_mode_code = user_mode_doc['mode'] if user_mode_doc and 'mode' in user_mode_doc else "chatbot"
+    if not user_mode_doc: # Save default if not found
+        def _set_default_mode_sync():
+            ai_mode_collection.update_one({"user_id": user_id}, {"$set": {"mode": "chatbot"}}, upsert=True)
+        await asyncio.to_thread(_set_default_mode_sync)
     current_mode_label = modes.get(current_mode_code, "Chatbot")
 
     mention = callback_query.from_user.mention_html()
@@ -109,8 +128,15 @@ async def settings_menu_callback(callback_query: types.CallbackQuery, bot: Bot):
 async def voice_settings_menu_callback(callback_query: types.CallbackQuery, bot: Bot): # bot: Bot might not be needed
     user_id = callback_query.from_user.id
     
-    user_voice_doc = user_voice_collection.find_one({"user_id": user_id})
+    def _get_voice_setting_sync():
+        return user_voice_collection.find_one({"user_id": user_id})
+    user_voice_doc = await asyncio.to_thread(_get_voice_setting_sync)
+    
     current_voice_setting = user_voice_doc.get("voice", "voice") if user_voice_doc and 'voice' in user_voice_doc else "voice"
+    if not user_voice_doc: # Save default if not found
+        def _set_default_voice_sync():
+            user_voice_collection.update_one({"user_id": user_id}, {"$set": {"voice": "voice"}}, upsert=True)
+        await asyncio.to_thread(_set_default_voice_sync)
 
     texts_to_translate = ["Voice", "Text", "Current setting: Answering in", "queries only.", "🔙 Back"]
     translated_texts = await batch_translate(texts_to_translate, user_id)
@@ -149,11 +175,13 @@ async def change_voice_setting_callback(callback_query: types.CallbackQuery, bot
     user_id = callback_query.from_user.id
     new_voice_setting = callback_query.data.split("_")[2] # "voice" or "text"
 
-    user_voice_collection.update_one(
-        {"user_id": user_id},
-        {"$set": {"voice": new_voice_setting}},
-        upsert=True
-    )
+    def _update_voice_setting_sync():
+        user_voice_collection.update_one(
+            {"user_id": user_id},
+            {"$set": {"voice": new_voice_setting}},
+            upsert=True
+        )
+    await asyncio.to_thread(_update_voice_setting_sync)
 
     # Re-display the voice settings menu with updated state
     # This avoids duplicating the message construction logic.

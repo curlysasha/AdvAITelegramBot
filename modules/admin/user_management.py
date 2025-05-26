@@ -8,8 +8,9 @@ administrative actions on users.
 import datetime
 from typing import Dict, Any, List, Tuple
 import logging
-from pyrogram import Client
-from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
+import asyncio # For asyncio.to_thread
+from aiogram import Bot, types # For Aiogram types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton # For Aiogram
 from modules.core.database import get_user_collection
 from modules.ui.theme import Theme, Colors
 from modules.lang import async_translate_to_lang
@@ -123,21 +124,23 @@ async def get_users_list(limit: int = 10, offset: int = 0, filter_type: str = "r
         sort_config = [('last_activity', -1)]
     
     try:
-        # Query users with proper error handling
-        if not sort_config:
-            # Default sort if none specified
-            users = list(user_collection.find(
-                query_filter,
-                skip=offset,
-                limit=limit
-            ))
-        else:
-            users = list(user_collection.find(
-                query_filter,
-                sort=sort_config,
-                skip=offset,
-                limit=limit
-            ))
+        # Query users with proper error handling, wrapped for async
+        def _find_users_sync():
+            if not sort_config:
+                # Default sort if none specified
+                return list(user_collection.find(
+                    query_filter,
+                    skip=offset,
+                    limit=limit
+                ))
+            else:
+                return list(user_collection.find(
+                    query_filter,
+                    sort=sort_config,
+                    skip=offset,
+                    limit=limit
+                ))
+        users = await asyncio.to_thread(_find_users_sync)
         
         # Enhance user data with additional info if available
         for user in users:
@@ -188,59 +191,47 @@ async def get_user_count(filter_type: str = "all") -> int:
     
     try:
         # Create filter based on filter_type
+        user_filter_dict = {} # Renamed to avoid conflict with filter_type parameter
         if filter_type == "active_24h":
-            user_filter = {
-                'is_group': {'$ne': True},
-                'last_activity': {'$gt': one_day_ago}
-            }
+            user_filter_dict = {'is_group': {'$ne': True}, 'last_activity': {'$gt': one_day_ago}}
         elif filter_type == "active_7d":
-            user_filter = {
-                'is_group': {'$ne': True},
-                'last_activity': {'$gt': seven_days_ago}
-            }
+            user_filter_dict = {'is_group': {'$ne': True}, 'last_activity': {'$gt': seven_days_ago}}
         elif filter_type == "new_24h":
-            user_filter = {
-                'is_group': {'$ne': True},
-                '$or': [
-                    {'created_at': {'$gt': one_day_ago}},
-                    {'join_date': {'$gt': one_day_ago}}
-                ]
-            }
+            user_filter_dict = {'is_group': {'$ne': True}, '$or': [{'created_at': {'$gt': one_day_ago}}, {'join_date': {'$gt': one_day_ago}}]}
         elif filter_type == "inactive":
-            user_filter = {
-                'is_group': {'$ne': True},
-                'last_activity': {'$lt': inactive_threshold}
-            }
+            user_filter_dict = {'is_group': {'$ne': True}, 'last_activity': {'$lt': inactive_threshold}}
         elif filter_type == "groups":
-            user_filter = {'is_group': True}
+            user_filter_dict = {'is_group': True}
         else:  # "all" default - only count users, not groups
-            user_filter = {'is_group': {'$ne': True}}
+            user_filter_dict = {'is_group': {'$ne': True}}
         
-        # Count users
-        return user_collection.count_documents(user_filter)
+        # Count users, wrapped for async
+        def _count_users_sync():
+            return user_collection.count_documents(user_filter_dict)
+        return await asyncio.to_thread(_count_users_sync)
     except Exception as e:
         logger.error(f"Error counting users: {str(e)}")
         return 0
 
-async def handle_user_management(client: Client, callback: CallbackQuery, page: int = 0, filter_type: str = "recent"):
+async def handle_user_management(bot: Bot, callback_query: types.CallbackQuery, page: int = 0, filter_type: str = "recent"): # Aiogram types
     """Handle user management panel with improved categorization"""
-    user_id = callback.from_user.id
+    user_id = callback_query.from_user.id # Use callback_query
     
     # Check if user is admin
-    if user_id not in ADMINS:
-        await callback.answer("You don't have permission to access user management", show_alert=True)
+    if user_id not in ADMINS: # ADMINS should be list of int
+        await callback_query.answer("You don't have permission to access user management", show_alert=True) # Use callback_query
         return
     
     # Show loading message
     loading_message = await async_translate_to_lang("⏳ Loading user management...", user_id)
     try:
-        await callback.message.edit(
+        await callback_query.message.edit_text( # Use edit_text
             text=loading_message,
             reply_markup=None
         )
     except Exception as e:
         logger.error(f"Error showing loading message: {str(e)}")
-        await callback.answer("Loading user management...", show_alert=True)
+        await callback_query.answer("Loading user management...", show_alert=True) # Use callback_query
         return
     
     try:
@@ -387,19 +378,21 @@ async def handle_user_management(client: Client, callback: CallbackQuery, page: 
         keyboard.append(action_row)
         
         # Show user list
-        await callback.message.edit(
+        await callback_query.message.edit_text( # Use edit_text
             text=message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard), # Pass inline_keyboard
+            parse_mode="Markdown" # Ensure Markdown is parsed for bolding etc.
         )
     except Exception as e:
         logger.error(f"Error in user management panel: {str(e)}")
-        await callback.answer(f"Error: {str(e)[:20]}...", show_alert=True)
+        await callback_query.answer(f"Error: {str(e)[:150]}...", show_alert=True) # Use callback_query, longer alert
         # Try to recover by going back to admin panel
+        # show_admin_panel_handler is the new name in maintenance.py
         try:
-            from modules.maintenance import show_admin_panel
-            await show_admin_panel(client, callback)
-        except:
-            # Last resort fallback
-            await callback.answer("Failed to load user management. Try again later.", show_alert=True)
+            from modules.maintenance import show_admin_panel_handler 
+            await show_admin_panel_handler(callback_query, bot) # Pass Aiogram types
+        except Exception as e_recovery:
+            logger.error(f"Error recovering to admin panel: {e_recovery}")
+            await callback_query.answer("Failed to load user management. Try again later.", show_alert=True)
 
 # Update __init__.py to export this function 

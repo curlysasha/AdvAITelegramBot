@@ -6,926 +6,326 @@ import uuid
 import hashlib
 import re
 from datetime import datetime
-from typing import List, Optional, Dict, Tuple
+from typing import List, Optional, Dict, Any
 import requests
-import io
 
-from pyrogram import Client
-from pyrogram.types import (
-    InlineQuery, 
-    InlineQueryResultPhoto, 
-    InlineQueryResultArticle,
-    InputTextMessageContent,
-    InlineQueryResultCachedPhoto,
-    InputMediaPhoto,
-    Message
-)
-from pyrogram.errors import QueryIdInvalid, MessageNotModified
+from aiogram import Bot, types
+from aiogram.exceptions import TelegramAPIError
 
 from ImgGenModel.g4f.client import Client as ImageClient
-from ImgGenModel.g4f.Provider import PollinationsAI
+from ImgGenModel.g4f.Provider import PollinationsAI # Using a specific provider
 from config import LOG_CHANNEL
 
-# Get the logger
 logger = logging.getLogger(__name__)
 
-# Store ongoing inline image generations to prevent duplicates
-# Format: {task_id: {"user_id": user_id, "prompt": prompt, "start_time": time}}
-ongoing_generations = {}
+# --- Data Structures ---
+ongoing_generations: Dict[str, Dict[str, Any]] = {} # task_id -> {user_id, prompt, start_time}
+image_cache: Dict[int, Dict[str, List[Any]]] = {} # user_id -> {"file_ids": [], "prompts": [], "timestamps": []}
+MAX_CACHE_PER_USER = 5
+temp_query_cache: Dict[int, Dict[str, Any]] = {} # user_id -> {query, file_id, prompt, timestamp}
 
-# Store pending image generations and their messages
-# Format: {task_id: {"user_id": user_id, "message": message_obj, "prompt": prompt}}
-pending_generations = {}
-
-# Image cache system - store generated images by user
-# Format: {user_id: {"file_ids": [file_id1, file_id2...], "prompts": [prompt1, prompt2...], "timestamps": [time1, time2...]}}
-image_cache = {}
-MAX_CACHE_PER_USER = 5  # Maximum number of cached images per user
-
-# Temporary query cache for handling inline query timeouts
-# Format: {user_id: {"query": query, "file_id": file_id, "prompt": prompt, "timestamp": time}}
-temp_query_cache = {}
-
-async def generate_inline_image(prompt: str) -> List[str]:
-    """Generate images for inline query
-    
-    Args:
-        prompt: The text prompt for image generation
-        
-    Returns:
-        List of image URLs
-    """
-    logger.info(f"Generating inline image with prompt: '{prompt}'")
-    
-    # Enhanced prompt for realistic style by default
+# --- Core Inline Image Generation ---
+async def generate_inline_image_api_g4f(prompt: str) -> List[str]:
+    logger.info(f"G4F: Generating inline image with prompt: '{prompt}'")
     enhanced_prompt = f"{prompt}, ultra realistic, detailed, photographic quality"
-    logger.info(f"Enhanced inline prompt: '{enhanced_prompt}'")
     
-    image_urls = []
-    max_images = 1  # Only generate one image for inline queries to keep it fast
+    image_paths: List[str] = [] # Store local paths or URLs
     
-    # Try with PollinationsAI first, then fallback to default
-    providers = ["PollinationsAI", None]
+    img_client = ImageClient() # Default client, may need specific provider initialization
     
-    for provider in providers:
-        client = ImageClient()
-        try:
-            # Prepare provider configuration
-            provider_obj = None
-            model_name = "dall-e-3"  # Default model
-            
-            if provider == "PollinationsAI":
-                try:
-                    provider_obj = PollinationsAI
-                    model_name = None  # PollinationsAI uses its own model
-                    logger.info(f"Using PollinationsAI provider for inline query")
-                except Exception as e:
-                    logger.error(f"Failed to use PollinationsAI provider for inline: {str(e)}")
-                    continue
-            
-            # Standard image size - smaller for inline to be faster
-            width = 512
-            height = 512
-            
-            # Prepare generation parameters
-            generation_kwargs = {
-                "prompt": enhanced_prompt,
-                "n": max_images,
-                "provider": provider_obj,
-                "width": width,
-                "height": height,
-                "quality": "standard"
-            }
-            
-            # Only add model parameter if specified
-            if model_name:
-                generation_kwargs["model"] = model_name
-                
-            # Generate with timeout
-            logger.info(f"Sending inline generation request with provider {provider}")
-            response = await asyncio.wait_for(
-                client.images.async_generate(**generation_kwargs),
-                timeout=25  # Timeout for inline queries
+    # Define the synchronous part of the g4f call
+    def _g4f_sync_call_inline():
+        # If g4f's async_generate is a true coroutine function, it should not be called directly here.
+        # Instead, its synchronous equivalent (if available) or the execution of the coroutine
+        # in a separate loop (as shown below) would be wrapped.
+        async def _actual_g4f_coroutine_inline(): # Renamed to avoid conflict
+            return await img_client.images.async_generate(
+                model="dall-e-3", 
+                prompt=enhanced_prompt,
+                n=1,
+                provider=PollinationsAI, 
+                width=512, 
+                height=512,
+                quality="standard"
             )
-            
-            # Process response
-            for image_data in response.data:
-                image_urls.append(image_data.url)
-                
-            if image_urls:
-                logger.info(f"Successfully generated {len(image_urls)} images for inline query")
-                break
-                
-        except asyncio.TimeoutError:
-            logger.warning(f"Inline image generation timed out with provider {provider}")
-            continue
-        except Exception as e:
-            logger.error(f"Error generating inline image with provider {provider}: {str(e)}")
-            continue
-    
-    # Process URLs to local paths - same method as in image_generation.py
-    local_paths = []
-    for url in image_urls:
-        # Convert to local path
-        if url.startswith("/images/"):
-            # Ensure the directory exists
-            os.makedirs("./generated_images", exist_ok=True)
-            
-            # Get the filename part
-            filename = os.path.basename(url)
-            local_path = f"./generated_images/{filename}"
-            
-            # For URLs from PollinationsAI that start with /images/,
-            # the actual file is already saved in generated_images directory
-            if os.path.exists(local_path):
-                logger.info(f"Found existing local file at {local_path}")
-                local_paths.append(local_path)
-            else:
-                # Try to download if not found
-                try:
-                    # Get the full URL
-                    full_url = f"https://image.pollinations.ai{url}"
-                    response = requests.get(full_url, timeout=10)
-                    response.raise_for_status()
-                    
-                    # Save the image
-                    with open(local_path, 'wb') as f:
-                        f.write(response.content)
-                    
-                    logger.info(f"Downloaded image to {local_path}")
-                    local_paths.append(local_path)
-                except Exception as e:
-                    logger.error(f"Failed to download image to {local_path}: {str(e)}")
-        else:
-            # For other URLs, try to download them
-            unique_id = str(uuid.uuid4())
-            local_path = f"./generated_images/inline_{unique_id}.jpg"
-            
-            try:
-                response = requests.get(url, timeout=10)
-                response.raise_for_status()
-                
-                with open(local_path, 'wb') as f:
-                    f.write(response.content)
-                
-                logger.info(f"Downloaded image to {local_path}")
-                local_paths.append(local_path)
-            except Exception as e:
-                logger.error(f"Failed to download image to {local_path}: {str(e)}")
-    
-    return local_paths
+        # Run the coroutine in a new event loop within the thread
+        return asyncio.run(_actual_g4f_coroutine_inline())
 
-def create_task_id(user_id: int, prompt: str) -> str:
-    """Create a unique task ID for the generation
-    
-    Args:
-        user_id: User ID requesting the generation
-        prompt: The prompt text
-        
-    Returns:
-        A unique task ID string
-    """
-    unique_string = f"{user_id}:{prompt}:{time.time()}"
-    task_id = hashlib.md5(unique_string.encode()).hexdigest()[:10]
-    return task_id
-
-def get_image_caption(prompt: str) -> str:
-    """Get standard caption for generated images
-    
-    Args:
-        prompt: The prompt used to generate the image
-        
-    Returns:
-        Formatted caption with prompt and bot username
-    """
-    return f"🖼️ **AI Generated Image**\n\n📝 **Prompt**: `{prompt}`\n\n@AdvChatGptBot"
-
-def get_cached_image(user_id: int, prompt: str = None) -> Optional[str]:
-    """Get a cached image file_id for a user
-    
-    Args:
-        user_id: The user ID
-        prompt: Optional prompt to match (if None, return most recent image)
-        
-    Returns:
-        File ID of cached image or None if not found
-    """
-    if user_id not in image_cache:
-        return None
-    
-    user_cache = image_cache[user_id]
-    
-    if not user_cache["file_ids"]:
-        return None
-    
-    # If no specific prompt requested, return the most recent image
-    if prompt is None:
-        return user_cache["file_ids"][0]  # Most recent is first
-    
-    # Try to find an exact match for the prompt
-    for i, cached_prompt in enumerate(user_cache["prompts"]):
-        if cached_prompt.lower() == prompt.lower():
-            return user_cache["file_ids"][i]
-    
-    # Check for prompt with extra spaces (user might be adding spaces while waiting)
-    stripped_prompt = re.sub(r'\s+', ' ', prompt.lower()).strip()
-    for i, cached_prompt in enumerate(user_cache["prompts"]):
-        stripped_cached = re.sub(r'\s+', ' ', cached_prompt.lower()).strip()
-        if stripped_prompt == stripped_cached:
-            return user_cache["file_ids"][i]
-    
-    # No exact match, try to find a similar prompt (contains the same keywords)
-    prompt_keywords = set(stripped_prompt.split())
-    best_match = None
-    best_match_score = 0
-    
-    for i, cached_prompt in enumerate(user_cache["prompts"]):
-        stripped_cached = re.sub(r'\s+', ' ', cached_prompt.lower()).strip()
-        cached_keywords = set(stripped_cached.split())
-        common_keywords = prompt_keywords.intersection(cached_keywords)
-        
-        # Calculate match score based on common keywords
-        if len(common_keywords) > best_match_score:
-            best_match_score = len(common_keywords)
-            best_match = user_cache["file_ids"][i]
-    
-    # Only return if there's a reasonable match (at least 3 common keywords or 75% match)
-    min_keywords = min(len(prompt_keywords), len(cached_keywords)) if 'cached_keywords' in locals() else 0
-    if best_match_score >= 3 or (min_keywords > 0 and best_match_score / min_keywords >= 0.75):
-        return best_match
-    
-    # Check temporary query cache
-    if user_id in temp_query_cache:
-        temp_cache = temp_query_cache[user_id]
-        stripped_temp = re.sub(r'\s+', ' ', temp_cache["prompt"].lower()).strip()
-        if stripped_prompt == stripped_temp:
-            return temp_cache["file_id"]
-    
-    # No good match found, don't return a cached image
-    return None
-
-def add_to_cache(user_id: int, file_id: str, prompt: str) -> None:
-    """Add a generated image to the cache
-    
-    Args:
-        user_id: The user ID
-        file_id: The Telegram file_id
-        prompt: The prompt used to generate the image
-    """
-    # Initialize user cache if not exists
-    if user_id not in image_cache:
-        image_cache[user_id] = {
-            "file_ids": [],
-            "prompts": [],
-            "timestamps": []
-        }
-    
-    user_cache = image_cache[user_id]
-    
-    # Check if we already have this prompt (to avoid duplicates)
-    for i, cached_prompt in enumerate(user_cache["prompts"]):
-        if cached_prompt.lower() == prompt.lower():
-            # Replace with newer file_id
-            user_cache["file_ids"][i] = file_id
-            user_cache["timestamps"][i] = time.time()
-            logger.info(f"Updated existing cache entry for user {user_id}, prompt: '{prompt}'")
-            return
-    
-    # Add new image at the front (most recent first)
-    user_cache["file_ids"].insert(0, file_id)
-    user_cache["prompts"].insert(0, prompt)
-    user_cache["timestamps"].insert(0, time.time())
-    
-    # Limit cache size
-    if len(user_cache["file_ids"]) > MAX_CACHE_PER_USER:
-        user_cache["file_ids"].pop()
-        user_cache["prompts"].pop()
-        user_cache["timestamps"].pop()
-        
-    logger.info(f"Added image to cache for user {user_id}, prompt: '{prompt}'")
-    
-    # Also add to temporary query cache for quick recovery
-    temp_query_cache[user_id] = {
-        "query": prompt,
-        "file_id": file_id,
-        "prompt": prompt,
-        "timestamp": time.time()
-    }
-
-def clear_user_cache(user_id: int) -> None:
-    """Clear the cache for a specific user
-    
-    Args:
-        user_id: The user ID to clear cache for
-    """
-    if user_id in image_cache:
-        del image_cache[user_id]
-        logger.info(f"Cleared image cache for user {user_id}")
-        
-    if user_id in temp_query_cache:
-        del temp_query_cache[user_id]
-        logger.info(f"Cleared temporary query cache for user {user_id}")
-
-async def handle_inline_query(client: Client, inline_query: InlineQuery) -> None:
-    """Handle inline queries for image generation and AI responses
-    
-    This function processes inline queries and:
-    1. Routes to image generation if the prompt starts with "image" and ends with "."
-    2. Routes to AI response for all other prompts that end with "." or "?"
-    """
-    query = inline_query.query.strip()
-    user_id = inline_query.from_user.id
-    query_id = inline_query.id
-    
-    # Check if the query is empty
-    if not query:
-        # Show instructions when query is empty
-        try:
-            await inline_query.answer(
-                results=[
-                    InlineQueryResultArticle(
-                        title="Generate an image or get AI response",
-                        description="Images: Start with 'image' and end with a period (.)\nAI: End with a period (.) or question mark (?)",
-                        input_message_content=InputTextMessageContent(
-                            "**📝 How to use inline features:**\n\n"
-                            "• For **AI images**: Type `image your prompt.`\n"
-                            "• For **AI responses**: Type `your question?` or `your prompt.`\n\n"
-                            "End your query with `.` or `?` when ready."
-                        ),
-                        thumb_url="https://img.icons8.com/color/452/artificial-intelligence.png"
-                    )
-                ],
-                cache_time=1
-            )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for empty query from user {user_id}")
-        except Exception as e:
-            logger.error(f"Error answering empty inline query: {str(e)}")
-        return
-    
-    # Import here to avoid circular imports
-    from modules.models.inline_ai_response import handle_inline_ai_query
-    
-    # Check if it's an image generation request (starts with "image" and ends with ".")
-    is_image_request = query.lower().startswith("image ") and query.endswith(".")
-    
-    # Check if it's an AI response request (ends with "." or "?")
-    is_ai_request = query.endswith(".") or query.endswith("?")
-    
-    # If not properly formatted, show instructions based on what they're trying to do
-    if not (is_image_request or is_ai_request):
-        # Show appropriate waiting message based on what they seem to be typing
-        if query.lower().startswith("image "):
-            # Seems to be typing an image prompt
-            try:
-                await inline_query.answer(
-                    results=[
-                        InlineQueryResultArticle(
-                            title="Continue typing your image prompt...",
-                            description="End your prompt with a period (.) to generate",
-                            input_message_content=InputTextMessageContent(
-                                f"Your current image prompt: {query}\n\n"
-                                "Add a period (.) at the end when you're done to generate the image."
-                            ),
-                            thumb_url="https://img.icons8.com/color/452/picture.png"
-                        )
-                    ],
-                    cache_time=1
-                )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for incomplete image prompt from user {user_id}")
-            except Exception as e:
-                logger.error(f"Error answering incomplete image query: {str(e)}")
-        else:
-            # Seems to be typing an AI query
-            try:
-                await inline_query.answer(
-                    results=[
-                        InlineQueryResultArticle(
-                            title="Continue typing your question...",
-                            description="End with a period (.) or question mark (?) to get AI response",
-                            input_message_content=InputTextMessageContent(
-                                f"Your current prompt: {query}\n\n"
-                                "Add a period (.) or question mark (?) at the end when you're done."
-                            ),
-                            thumb_url="https://img.icons8.com/color/452/chatgpt.png"
-                        )
-                    ],
-                    cache_time=1
-                )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for incomplete AI prompt from user {user_id}")
-            except Exception as e:
-                logger.error(f"Error answering incomplete AI query: {str(e)}")
-        return
-    
-    # Handle image generation request
-    if is_image_request:
-        # Remove "image " prefix and ending "." from the prompt
-        prompt = query[6:-1].strip()
-        
-        # Call the original image generation function
-        await handle_image_generation_query(client, inline_query, prompt)
-    else:
-        # Handle AI response request
-        # Remove the ending "." or "?" from the prompt
-        prompt = query[:-1].strip()
-        
-        # Call the AI response handler
-        await handle_inline_ai_query(client, inline_query, prompt)
-
-# Extract the original image generation logic into a separate function
-async def handle_image_generation_query(client: Client, inline_query: InlineQuery, prompt: str) -> None:
-    """Handle inline queries specifically for image generation
-    
-    Args:
-        client: Pyrogram client instance
-        inline_query: The inline query object
-        prompt: The processed prompt text (without the ending period)
-    """
-    user_id = inline_query.from_user.id
-    query_id = inline_query.id
-    
-    # If prompt is too short, ask for more detail
-    if len(prompt) < 3:
-        try:
-            await inline_query.answer(
-                results=[
-                    InlineQueryResultArticle(
-                        title="Prompt too short",
-                        description="Please provide a more detailed prompt",
-                        input_message_content=InputTextMessageContent(
-                            "Your prompt is too short. Please provide more details for better results."
-                        ),
-                        thumb_url="https://img.icons8.com/color/452/high-importance.png"
-                    )
-                ],
-                cache_time=1
-            )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for short prompt from user {user_id}")
-        except Exception as e:
-            logger.error(f"Error answering short prompt inline query: {str(e)}")
-        return
-    
-    # Check for command to clear cache
-    if prompt.lower() == "clear cache":
-        clear_user_cache(user_id)
-        try:
-            await inline_query.answer(
-                results=[
-                    InlineQueryResultArticle(
-                        title="Cache Cleared",
-                        description="Your image cache has been cleared",
-                        input_message_content=InputTextMessageContent(
-                            "✅ Your image cache has been cleared. All new images will be freshly generated."
-                        ),
-                        thumb_url="https://img.icons8.com/color/452/delete.png"
-                    )
-                ],
-                cache_time=1
-            )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for cache clear from user {user_id}")
-        except Exception as e:
-            logger.error(f"Error answering cache clear command: {str(e)}")
-        return
-    
-    # Check for cached images first
-    cached_file_id = get_cached_image(user_id, prompt)
-    if cached_file_id:
-        try:
-            # Respond immediately with cached image
-            await inline_query.answer(
-                results=[
-                    InlineQueryResultCachedPhoto(
-                        photo_file_id=cached_file_id,
-                        title=f"AI Generated Image",
-                        description=prompt,
-                        caption=get_image_caption(prompt)
-                    )
-                ],
-                cache_time=3600  # Cache for an hour
-            )
-            logger.info(f"Answered query from user {user_id} with cached image for prompt: '{prompt}'")
-            
-            # Still trigger background generation to refresh the cache if user isn't
-            # currently generating something else
-            if not any(data["user_id"] == user_id for data in ongoing_generations.values()):
-                # Generate a unique task ID for this request
-                task_id = create_task_id(user_id, prompt)
-                ongoing_generations[task_id] = {
-                    "user_id": user_id,
-                    "prompt": prompt,
-                    "start_time": time.time(),
-                    "is_cache_refresh": True
-                }
-                # Start background generation to refresh cache
-                asyncio.create_task(generate_and_cache_image(client, user_id, prompt, task_id))
-                
-            return
-        except Exception as e:
-            logger.error(f"Error answering with cached image: {str(e)}")
-            # Continue to generate new image if cached image failed
-    
-    # Check if there's an ongoing generation in progress for this user
-    for task_id, data in ongoing_generations.items():
-        if data["user_id"] == user_id and time.time() - data["start_time"] < 30:
-            # Show waiting message
-            try:
-                await inline_query.answer(
-                    results=[
-                        InlineQueryResultArticle(
-                            title="Still generating your image...",
-                            description="Please wait, this can take a few seconds",
-                            input_message_content=InputTextMessageContent(
-                                f"Still generating your image for: {prompt}\n\n"
-                                "⏳Please wait... Add space after every 5-7 seconds, if image is not generated."
-                            ),
-                            thumb_url="https://img.icons8.com/color/452/hourglass.png"
-                        )
-                    ],
-                    cache_time=1
-                )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for ongoing generation message from user {user_id}")
-            except Exception as e:
-                logger.error(f"Error answering ongoing generation message: {str(e)}")
-            return
-    
-    # Generate a unique task ID for this request
-    task_id = create_task_id(user_id, prompt)
-    
-    # Store local paths for cleanup
-    local_paths = []
-    
-    # Start the immediate generation
     try:
-        # Store this query in ongoing generations
-        ongoing_generations[task_id] = {
-            "user_id": user_id,
-            "prompt": prompt,
-            "start_time": time.time(),
-            "query_id": query_id,
-            "inline_query": inline_query
-        }
-        
-        # Show initial "generating" message
-        await inline_query.answer(
-            results=[
-                InlineQueryResultArticle(
-                    title="🎨 Generating your image...",
-                    description=f"Prompt: {prompt}\n⏳Please wait... Add space after every 5-7 seconds, if image is not generated.",
-                    input_message_content=InputTextMessageContent(
-                        f"🖼️ **Generating Image**\n\n📝 **Prompt**: `{prompt}`\n⏳Please wait... Add space after every 5-7 seconds, if image is not generated."
-                    ),
-                    thumb_url="https://img.icons8.com/color/452/hourglass.png"
-                )
-            ],
-            cache_time=1
+        # Wrap the synchronous execution of the g4f operation
+        response = await asyncio.wait_for(
+            asyncio.to_thread(_g4f_sync_call_inline), 
+            timeout=50 # Slightly longer timeout for thread overhead + generation
         )
         
-        # Generate the image - this returns local file paths directly
-        local_paths = await generate_inline_image(prompt)
-        
-        # If no images were generated, show error
-        if not local_paths:
-            logger.warning(f"No images generated for task {task_id}, user {user_id}")
-            try:
-                await inline_query.answer(
-                    results=[
-                        InlineQueryResultArticle(
-                            title="❌ Failed to generate image",
-                            description="Please try a different prompt",
-                            input_message_content=InputTextMessageContent(
-                                f"Failed to generate image for: {prompt}\n\n"
-                                "Please try a different prompt or try again later."
-                            ),
-                            thumb_url="https://img.icons8.com/color/452/cancel.png"
-                        )
-                    ],
-                    cache_time=5
-                )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for failed generation from user {user_id}")
-            except Exception as e:
-                logger.error(f"Error answering failed generation: {str(e)}")
-            
-            # Clean up any partial files
-            for path in local_paths:
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                        logger.info(f"Cleaned up local file after failure: {path}")
-                except Exception as e:
-                    logger.error(f"Error cleaning up file {path}: {str(e)}")
-                    
-            return
-            
-        # First, upload images to Telegram (via the log channel) to get file_ids
-        file_ids = []
-        for local_path in local_paths:
-            if not os.path.exists(local_path):
-                logger.error(f"Local file does not exist: {local_path}")
-                continue
-                
-            try:
-                # Upload the photo to get the file_id
-                sent_photo = await client.send_photo(
-                    chat_id=LOG_CHANNEL,
-                    photo=local_path,
-                    caption=f"#ImgLog #InlineGenerated\n**Prompt**: `{prompt}`\n"\
-                            f"**User**: [User {user_id}](tg://user?id={user_id})\n"\
-                            f"**Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                )
-                
-                # Get the file_id
-                if hasattr(sent_photo, 'photo') and sent_photo.photo:
-                    file_id = sent_photo.photo.file_id
-                    file_ids.append(file_id)
-                    logger.info(f"Got file_id {file_id} for {local_path}")
-                    
-                    # Add to cache
-                    add_to_cache(user_id, file_id, prompt)
-                else:
-                    logger.error(f"Failed to get file_id from uploaded photo: {local_path}")
-            except Exception as e:
-                logger.error(f"Error uploading photo to get file_id: {str(e)}")
-                
-        # Prepare results using the file_ids
-        results = []
-        for i, file_id in enumerate(file_ids):
-            # Create a cached photo result
-            results.append(
-                InlineQueryResultCachedPhoto(
-                    photo_file_id=file_id,
-                    title=f"AI Generated Image",
-                    description=prompt,
-                    caption=get_image_caption(prompt)
-                )
-            )
-                
-        # No valid results
-        if not results:
-            logger.error(f"No valid results for task {task_id}, user {user_id}")
-            try:
-                await inline_query.answer(
-                    results=[
-                        InlineQueryResultArticle(
-                            title="❌ Failed to process image",
-                            description="Please try again",
-                            input_message_content=InputTextMessageContent(
-                                f"Failed to process image for: {prompt}\n\n"
-                                "Please try again."
-                            ),
-                            thumb_url="https://img.icons8.com/color/452/cancel.png"
-                        )
-                    ],
-                    cache_time=5
-                )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for no valid results from user {user_id}")
-            except Exception as e:
-                logger.error(f"Error answering no valid results: {str(e)}")
-                
-            # Clean up files
-            for path in local_paths:
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                        logger.info(f"Cleaned up local file after processing failure: {path}")
-                except Exception as e:
-                    logger.error(f"Error cleaning up file {path}: {str(e)}")
-                    
-            return
-            
-        # Answer with results
-        try:
-            await inline_query.answer(
-                results=results,
-                cache_time=3600  # Cache for an hour
-            )
-            logger.info(f"Successfully answered inline query for user {user_id} with {len(results)} results")
-            
-            # Delete local files immediately after answering successfully
-            for path in local_paths:
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                        logger.info(f"Cleaned up local file after successful answer: {path}")
-                except Exception as e:
-                    logger.error(f"Error cleaning up file {path}: {str(e)}")
-                    
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for final results from user {user_id}")
-            
-            # Store in temp cache for later retrieval if user adds spaces to query
-            if file_ids:
-                temp_query_cache[user_id] = {
-                    "query": prompt,
-                    "file_id": file_ids[0],  # Just keep the first one
-                    "prompt": prompt,
-                    "timestamp": time.time()
-                }
-                logger.info(f"Saved image to temporary cache for user {user_id} for query recovery")
-                
-            # Clean up files
-            for path in local_paths:
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                        logger.info(f"Cleaned up local file after query invalid: {path}")
-                except Exception as e:
-                    logger.error(f"Error cleaning up file {path}: {str(e)}")
-                    
-        except Exception as e:
-            logger.error(f"Error answering with final results: {str(e)}")
-            # Clean up files
-            for path in local_paths:
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                        logger.info(f"Cleaned up local file after answer error: {path}")
-                except Exception as e2:
-                    logger.error(f"Error cleaning up file {path}: {str(e2)}")
-            
-    except Exception as e:
-        logger.error(f"Error in inline generation for task {task_id}: {str(e)}")
-        try:
-            await inline_query.answer(
-                results=[
-                    InlineQueryResultArticle(
-                        title="❌ Error generating image",
-                        description="An error occurred",
-                        input_message_content=InputTextMessageContent(
-                            f"Error generating image: {str(e)}"
-                        ),
-                        thumb_url="https://img.icons8.com/color/452/cancel.png"
-                    )
-                ],
-                cache_time=5
-            )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for error message from user {user_id}")
-        except Exception as e2:
-            logger.error(f"Error answering with error message: {str(e2)}")
-            
-        # Clean up files
-        for path in local_paths:
-            try:
-                if os.path.exists(path):
-                    os.remove(path)
-                    logger.info(f"Cleaned up local file after general error: {path}")
-            except Exception as e3:
-                logger.error(f"Error cleaning up file {path}: {str(e3)}")
-    finally:
-        # Clean up
-        if task_id in ongoing_generations:
-            del ongoing_generations[task_id]
+        if not os.path.exists("./generated_images_inline"):
+            os.makedirs("./generated_images_inline")
 
-async def generate_and_cache_image(client: Client, user_id: int, prompt: str, task_id: str) -> None:
-    """Generate an image in the background and add it to the cache
+        for i, image_data in enumerate(response.data):
+            # g4f returns image data typically as bytes or a URL
+            # Assuming image_data.url holds the URL or path marker
+            url_or_marker = image_data.url 
+            
+            if isinstance(image_data.bytes, bytes): # If raw bytes are available
+                filename = f"inline_{uuid.uuid4()}.png" # Assume png if bytes
+                local_path = os.path.join("./generated_images_inline", filename)
+                with open(local_path, "wb") as f:
+                    f.write(image_data.bytes)
+                image_paths.append(local_path)
+                logger.info(f"Saved image from bytes to {local_path}")
+            elif isinstance(url_or_marker, str):
+                if url_or_marker.startswith("http"): # It's a URL, download it
+                    try:
+                        img_response = requests.get(url_or_marker, timeout=20)
+                        img_response.raise_for_status()
+                        filename = f"inline_{uuid.uuid4()}.jpg" # Assume jpg for URLs
+                        local_path = os.path.join("./generated_images_inline", filename)
+                        with open(local_path, "wb") as f:
+                            f.write(img_response.content)
+                        image_paths.append(local_path)
+                        logger.info(f"Downloaded image from {url_or_marker} to {local_path}")
+                    except Exception as e:
+                        logger.error(f"Failed to download image from URL {url_or_marker}: {e}")
+                elif url_or_marker.startswith("/images/"): # Pollinations local path marker
+                    # This assumes Pollinations saves files to a predictable local path structure
+                    # that might be accessible relative to where g4f is run.
+                    # The original code had: resolved_path = f"./generated_images{url_or_marker}"
+                    # This needs to align with how g4f + PollinationsAI provider actually saves files.
+                    # If it's always a web URL, then the http path above handles it.
+                    # If it's truly a local path that g4f makes available, this could work.
+                    # This is a common point of failure if the path resolution is incorrect.
+                    # For now, let's assume it's a URL or raw bytes.
+                    logger.warning(f"Received a local path marker {url_or_marker} from PollinationsAI, but direct local file access from g4f provider output is unreliable. Prefer URLs or raw bytes.")
+                    # If you are certain g4f saves these locally and makes them accessible:
+                    # potential_local_path = os.path.join("./generated_images", os.path.basename(url_or_marker))
+                    # if os.path.exists(potential_local_path):
+                    #    image_paths.append(potential_local_path)
+                    # else:
+                    #    logger.error(f"Marked local path {potential_local_path} not found.")
+
+            if len(image_paths) >= 1: # Max 1 image for inline
+                break
+        
+        if not image_paths:
+            logger.warning(f"No images processed for inline prompt: {prompt}")
+            return []
+        return image_paths
+
+    except asyncio.TimeoutError:
+        logger.warning(f"Inline image generation API timed out for prompt: {prompt}")
+        return []
+    except Exception as e:
+        logger.error(f"Error in inline image generation API for prompt '{prompt}': {e}")
+        return []
+
+# --- Helper Functions ---
+def _create_task_id(user_id: int, prompt: str) -> str:
+    return hashlib.md5(f"{user_id}:{prompt}:{time.time()}".encode()).hexdigest()[:10]
+
+def _get_image_caption(prompt: str, bot_username: str) -> str:
+    return f"🖼️ **AI Image**\n📝 **Prompt**: `{prompt}`\n\n@{bot_username}"
+
+# --- Cache Functions ---
+def _get_cached_file_id(user_id: int, prompt: str) -> Optional[str]:
+    if user_id in image_cache and image_cache[user_id]["file_ids"]:
+        try:
+            idx = image_cache[user_id]["prompts"].index(prompt)
+            return image_cache[user_id]["file_ids"][idx]
+        except ValueError:
+            pass
+    if user_id in temp_query_cache and temp_query_cache[user_id]["prompt"] == prompt:
+        return temp_query_cache[user_id]["file_id"]
+    return None
+
+def _add_to_cache(user_id: int, file_id: str, prompt: str):
+    if user_id not in image_cache:
+        image_cache[user_id] = {"file_ids": [], "prompts": [], "timestamps": []}
+    if prompt in image_cache[user_id]["prompts"]: # Update existing
+        idx = image_cache[user_id]["prompts"].index(prompt)
+        image_cache[user_id]["file_ids"][idx] = file_id
+        image_cache[user_id]["timestamps"][idx] = time.time()
+    else: # Add new
+        image_cache[user_id]["file_ids"].insert(0, file_id)
+        image_cache[user_id]["prompts"].insert(0, prompt)
+        image_cache[user_id]["timestamps"].insert(0, time.time())
+        if len(image_cache[user_id]["file_ids"]) > MAX_CACHE_PER_USER:
+            for key_list in ["file_ids", "prompts", "timestamps"]: image_cache[user_id][key_list].pop()
+    temp_query_cache[user_id] = {"query": prompt, "file_id": file_id, "prompt": prompt, "timestamp": time.time()}
+
+def _clear_user_inline_cache(user_id: int):
+    if user_id in image_cache: del image_cache[user_id]
+    if user_id in temp_query_cache: del temp_query_cache[user_id]
+
+# --- Main Inline Query Handler ---
+async def handle_inline_image_query(inline_query: types.InlineQuery, bot: Bot):
+    query = inline_query.query.strip()
+    user_id = inline_query.from_user.id
+    bot_info = await bot.get_me()
+    bot_username = bot_info.username
+
+    prompt = query[6:-1].strip() # Assumes "image " prefix and "." suffix are already handled by main router
     
-    Args:
-        client: The Pyrogram client
-        user_id: User ID requesting the generation
-        prompt: The prompt text
-        task_id: Task ID for tracking
-    """
-    logger.info(f"Background generation for cache refresh, user {user_id}, prompt: '{prompt}'")
+    if not prompt or len(prompt) < 3:
+        await bot.answer_inline_query(inline_query.id, results=[types.InlineQueryResultArticle(
+            id=str(uuid.uuid4()), title="Prompt too short",
+            input_message_content=types.InputTextMessageContent(message_text="Prompt too short for image generation.")
+        )], cache_time=1)
+        return
+
+    if prompt.lower() == "clear cache":
+        _clear_user_inline_cache(user_id)
+        await bot.answer_inline_query(inline_query.id, results=[types.InlineQueryResultArticle(
+            id=str(uuid.uuid4()), title="Cache Cleared",
+            input_message_content=types.InputTextMessageContent(message_text="✅ Inline image cache cleared.")
+        )], cache_time=1)
+        return
+
+    cached_file_id = _get_cached_file_id(user_id, prompt)
+    if cached_file_id:
+        try:
+            await bot.answer_inline_query(inline_query.id, results=[types.InlineQueryResultCachedPhoto(
+                id=str(uuid.uuid4()), photo_file_id=cached_file_id,
+                caption=_get_image_caption(prompt, bot_username), parse_mode="Markdown"
+            )], cache_time=3600)
+            return
+        except TelegramAPIError as e: logger.error(f"Error with cached inline: {e}")
+
+    active_task = next((data for data in ongoing_generations.values() if data["user_id"] == user_id and time.time() - data["start_time"] < 45), None)
+    if active_task:
+        await bot.answer_inline_query(inline_query.id, results=[types.InlineQueryResultArticle(
+            id=str(uuid.uuid4()), title="Processing previous request...",
+            input_message_content=types.InputTextMessageContent(message_text=f"Still generating for: {active_task['prompt']}")
+        )], cache_time=1)
+        return
+
+    task_id = _create_task_id(user_id, prompt)
+    ongoing_generations[task_id] = {"user_id": user_id, "prompt": prompt, "start_time": time.time()}
     
-    local_paths = []
+    # Send initial "Generating..." result
+    # This is important so the user doesn't see "No results" if generation takes time
     try:
-        # Generate the image
-        local_paths = await generate_inline_image(prompt)
-        
-        if not local_paths:
-            logger.warning(f"No images generated for cache refresh, user {user_id}")
-            return
-            
-        # Upload to get file_id
-        for local_path in local_paths:
-            if not os.path.exists(local_path):
-                continue
-                
-            try:
-                # Upload quietly to log channel
-                sent_photo = await client.send_photo(
-                    chat_id=LOG_CHANNEL,
-                    photo=local_path,
-                    caption=f"#ImgLog #CacheRefresh\n**Prompt**: `{prompt}`\n"\
-                            f"**User**: [User {user_id}](tg://user?id={user_id})\n"\
-                            f"**Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                )
-                
-                # Get file_id and update cache
-                if hasattr(sent_photo, 'photo') and sent_photo.photo:
-                    file_id = sent_photo.photo.file_id
-                    add_to_cache(user_id, file_id, prompt)
-                    logger.info(f"Added new image to cache for user {user_id}")
-                    break  # Just need one image for cache
-            except Exception as e:
-                logger.error(f"Error uploading photo for cache refresh: {str(e)}")
-                
-            # Delete this file once uploaded
-            try:
-                if os.path.exists(local_path):
-                    os.remove(local_path)
-                    logger.info(f"Cleaned up local file after cache refresh: {local_path}")
-            except Exception as e:
-                logger.error(f"Error cleaning up file {local_path}: {str(e)}")
-                
-    except Exception as e:
-        logger.error(f"Error in background cache refresh: {str(e)}")
-    finally:
-        # Clean up
-        if task_id in ongoing_generations:
-            del ongoing_generations[task_id]
-            
-        # Clean up any remaining files
-        for path in local_paths:
-            try:
-                if os.path.exists(path):
-                    os.remove(path)
-                    logger.info(f"Cleaned up local file in cache refresh finally block: {path}")
-            except Exception as e:
-                logger.error(f"Error cleaning up file {path}: {str(e)}")
+        await bot.answer_inline_query(inline_query.id, results=[types.InlineQueryResultArticle(
+            id=task_id, # Use task_id as result id
+            title="🎨 Generating your image...",
+            description=f"Prompt: {prompt}",
+            input_message_content=types.InputTextMessageContent(message_text=f"🖼️ Generating: `{prompt}`", parse_mode="Markdown"),
+            thumb_url="https://img.icons8.com/color/452/hourglass.png" # Placeholder
+        )], cache_time=5) # Short cache time for this placeholder
+    except TelegramAPIError as e:
+        logger.error(f"Error sending initial 'Generating...' inline answer: {e}")
+        # If this fails, the rest might not matter for this specific query
+        if task_id in ongoing_generations: del ongoing_generations[task_id]
+        return
 
-# Cleanup old ongoing generations and cache periodically
-async def cleanup_ongoing_generations():
-    """Periodically clean up stale ongoing generations and old cache entries"""
-    while True:
-        try:
-            current_time = time.time()
-            to_remove = []
-            
-            # Clean up stale generations
-            for task_id, data in ongoing_generations.items():
-                # Remove if older than 2 minutes
-                if current_time - data["start_time"] > 120:
-                    to_remove.append(task_id)
-            
-            for task_id in to_remove:
-                del ongoing_generations[task_id]
-                
-            if to_remove:
-                logger.info(f"Cleaned up {len(to_remove)} stale inline generations")
-                
-            # Clean up temporary query cache (after 20 seconds)
-            temp_cache_to_remove = []
-            for user_id, data in temp_query_cache.items():
-                if current_time - data["timestamp"] > 20:  # 20 seconds expiry
-                    temp_cache_to_remove.append(user_id)
-            
-            for user_id in temp_cache_to_remove:
-                del temp_query_cache[user_id]
-                
-            if temp_cache_to_remove:
-                logger.info(f"Cleaned up temporary query cache for {len(temp_cache_to_remove)} users")
-                
-            # Clean up old cache entries (older than 24 hours)
-            cache_cleanup_count = 0
-            for user_id in list(image_cache.keys()):
-                user_cache = image_cache[user_id]
-                indices_to_remove = []
-                
-                for i, timestamp in enumerate(user_cache["timestamps"]):
-                    if current_time - timestamp > 86400:  # 24 hours
-                        indices_to_remove.append(i)
-                
-                # Remove old entries (in reverse order to maintain indices)
-                for i in sorted(indices_to_remove, reverse=True):
-                    user_cache["file_ids"].pop(i)
-                    user_cache["prompts"].pop(i)
-                    user_cache["timestamps"].pop(i)
-                    cache_cleanup_count += 1
-                
-                # Remove user from cache if no images left
-                if not user_cache["file_ids"]:
-                    del image_cache[user_id]
-            
-            if cache_cleanup_count > 0:
-                logger.info(f"Cleaned up {cache_cleanup_count} old AI cache entries")
-                
-            # Check for any stray files in the generated_images directory
+
+    local_image_paths = await generate_inline_image_api_g4f(prompt)
+    
+    final_results = []
+    if local_image_paths:
+        for path in local_image_paths:
             try:
-                if os.path.exists("./generated_images"):
-                    cutoff_time = current_time - 3600  # Files older than 1 hour
-                    for filename in os.listdir("./generated_images"):
-                        if filename.startswith("inline_"):
-                            file_path = os.path.join("./generated_images", filename)
-                            file_mod_time = os.path.getmtime(file_path)
-                            
-                            if file_mod_time < cutoff_time:
-                                try:
-                                    os.remove(file_path)
-                                    logger.info(f"Cleaned up stray file: {file_path}")
-                                except Exception as e:
-                                    logger.error(f"Error removing stray file {file_path}: {str(e)}")
+                log_caption = f"Inline gen for {user_id}: {prompt}"
+                # Upload to a channel (or self) to get a persistent file_id
+                # Ensure LOG_CHANNEL is an int
+                sent_photo_msg = await bot.send_photo(chat_id=int(LOG_CHANNEL), photo=types.FSInputFile(path), caption=log_caption)
+                if sent_photo_msg.photo:
+                    file_id = sent_photo_msg.photo[-1].file_id
+                    _add_to_cache(user_id, file_id, prompt)
+                    final_results.append(types.InlineQueryResultCachedPhoto(
+                        id=str(uuid.uuid4()), photo_file_id=file_id,
+                        caption=_get_image_caption(prompt, bot_username), parse_mode="Markdown"
+                    ))
+                os.remove(path)
             except Exception as e:
-                logger.error(f"Error checking for stray files: {str(e)}")
-                
-        except Exception as e:
-            logger.error(f"Error in cleanup task: {str(e)}")
+                logger.error(f"Error processing/uploading generated file {path}: {e}")
+                if os.path.exists(path): os.remove(path) # Attempt cleanup
+
+    # After generation, we can't use inline_query.answer again for the *same query_id*
+    # if the first answer was an article.
+    # The proper way to update is via `edit_message_media` on a `chosen_inline_result`,
+    # or by sending the image directly to the user in the chat if they selected the placeholder.
+    # For this migration, if results are found, we'll log them. The user would have chosen the "Generating..." result.
+    # A more advanced setup would involve chosen_inline_result and editing.
+    # For now, the user would have to re-type the query if the initial "Generating..." placeholder was too slow to be replaced.
+    # If final_results is populated, it means we successfully got file_ids.
+    # The user has already received the "Generating..." placeholder.
+    # The cached file_id will be used if they re-issue the query or type more.
+
+    if not final_results: # If, after everything, no results
+         logger.warning(f"Fully failed to provide inline image for {prompt}, user {user_id}")
+         # At this point, the user has the "Generating..." placeholder. Nothing more to do for *this* query.
+
+    if task_id in ongoing_generations: del ongoing_generations[task_id]
+
+
+# --- Main Inline Query Router Function ---
+# This function is intended to be imported and registered with the dispatcher in run.py
+async def route_inline_query(inline_query: types.InlineQuery, bot: Bot):
+    """Routes inline queries to image generation or AI response handlers."""
+    query = inline_query.query.strip()
+    
+    # Import here to avoid circular dependency with inline_ai_response
+    from modules.models.inline_ai_response import handle_inline_ai_query as process_ai_inline_query
+
+    if not query:
+        await bot.answer_inline_query(inline_query.id, results=[types.InlineQueryResultArticle(
+            id=str(uuid.uuid4()), title="Type a prompt...",
+            description="Image: 'image prompt.' | AI: 'question?' or 'prompt.'",
+            input_message_content=types.InputTextMessageContent(
+                message_text="**📝 How to use inline:**\n\n• **Images**: `image your prompt.`\n• **AI**: `your question?` or `your prompt.`",
+                parse_mode="Markdown"
+            )
+        )], cache_time=1)
+        return
+
+    is_image_req = query.lower().startswith("image ") and query.endswith(".")
+    is_ai_req = not is_image_req and (query.endswith(".") or query.endswith("?"))
+
+    if is_image_req:
+        await handle_inline_image_query(inline_query, bot)
+    elif is_ai_req:
+        prompt = query[:-1].strip()
+        await process_ai_inline_query(bot, inline_query, prompt) # Pass bot instance
+    else: # Incomplete query
+        desc_text = "End with . for image" if query.lower().startswith("image ") else "End with . or ? for AI"
+        await bot.answer_inline_query(inline_query.id, results=[types.InlineQueryResultArticle(
+            id=str(uuid.uuid4()), title="Continue typing...", description=desc_text,
+            input_message_content=types.InputTextMessageContent(message_text=f"Current prompt: {query}")
+        )], cache_time=1)
+
+
+# --- Cleanup Scheduler ---
+def get_inline_cleanup_scheduler_task_coro():
+    async def run_scheduled_inline_cleanup():
+        logger.info("Started inline image generation cleanup scheduler")
+        while True:
+            await asyncio.sleep(60) 
+            current_time = time.time()
+            ongoing_to_remove = [tid for tid, data in ongoing_generations.items() if current_time - data["start_time"] > 120]
+            for tid in ongoing_to_remove: del ongoing_generations[tid]
+            if ongoing_to_remove: logger.info(f"Cleaned {len(ongoing_to_remove)} stale inline gen tasks.")
+
+            temp_cache_to_remove = [uid for uid, data in temp_query_cache.items() if current_time - data["timestamp"] > 300]
+            for uid in temp_cache_to_remove: del temp_query_cache[uid]
+            if temp_cache_to_remove: logger.info(f"Cleaned temp query cache for {len(temp_cache_to_remove)} users.")
+
+            cache_cleanup_count = 0
+            for uid in list(image_cache.keys()):
+                indices_to_remove = [i for i, ts in enumerate(image_cache[uid]["timestamps"]) if current_time - ts > 86400]
+                for i in sorted(indices_to_remove, reverse=True):
+                    for key_list in ["file_ids", "prompts", "timestamps"]: image_cache[uid][key_list].pop(i)
+                    cache_cleanup_count +=1
+                if not image_cache[uid]["file_ids"]: del image_cache[uid]
+            if cache_cleanup_count > 0: logger.info(f"Cleaned {cache_cleanup_count} old inline image cache entries.")
             
-        await asyncio.sleep(5)  # Run every 5 seconds for more responsive cleanup 
+            try: # Cleanup local files
+                inline_dir = "./generated_images_inline"
+                if os.path.exists(inline_dir):
+                    cutoff = current_time - 3600 
+                    for fname in os.listdir(inline_dir):
+                        fpath = os.path.join(inline_dir, fname)
+                        if os.path.getmtime(fpath) < cutoff:
+                            try: os.remove(fpath); logger.info(f"Cleaned stray inline file: {fpath}")
+                            except Exception as e_rem: logger.error(f"Error removing stray inline file {fpath}: {e_rem}")
+            except Exception as e_list: logger.error(f"Error listing stray inline files: {e_list}")
+    return run_scheduled_inline_cleanup

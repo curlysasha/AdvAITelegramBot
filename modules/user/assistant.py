@@ -1,19 +1,27 @@
 from aiogram import types, F, Router, Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from pymongo import MongoClient
+from pymongo import MongoClient # Keep for direct calls if any remain, though ideally use user_db.py
 from config import DATABASE_URL
 # Assuming these lang functions are/will be Aiogram compatible
 from modules.lang import async_translate_to_lang 
+import database.user_db as user_db # Import user_db for its async functions
+import asyncio # For asyncio.to_thread
 
 # Router for assistant/mode settings
 assistant_settings_router = Router()
 
-# MongoDB Client
-# Consider moving DB initialization to a central place if not already done.
-client = MongoClient(DATABASE_URL)
-db = client["aibotdb"]
-ai_mode_collection = db['ai_mode']
+# MongoDB Client - This direct usage should be minimized, prefer user_db.py
+# client = MongoClient(DATABASE_URL) # Already in user_db.py or core.database.py
+# db = client["aibotdb"]
+# ai_mode_collection = db['ai_mode'] # Prefer get_ai_mode_collection from core.database or use user_db functions
+# For this specific file, direct usage of ai_mode_collection was there.
+# If we want to fully move to user_db.py functions, we'd remove direct ai_mode_collection usage.
+# For now, let's assume we keep direct usage for this file and wrap it,
+# OR switch to user_db.py functions if they cover all needs.
+# The prompt asks to wrap calls in user_db.py OR other direct DB interaction points.
+# Since user_db.py now has get_ai_mode_async and set_ai_mode_async, we should use those.
+# So, direct ai_mode_collection usage will be replaced.
 
 # Dictionary of modes with labels (ensure this is the single source of truth or imported)
 modes = {
@@ -27,10 +35,17 @@ modes = {
 async def assistant_settings_menu_callback(callback_query: types.CallbackQuery, bot: Bot): 
     user_id = callback_query.from_user.id
     
-    # Fetch current mode from DB
-    # These DB calls are synchronous. For a fully async app, consider an async driver like Motor.
-    user_mode_doc = ai_mode_collection.find_one({"user_id": user_id})
-    current_mode_code = user_mode_doc['mode'] if user_mode_doc and 'mode' in user_mode_doc else "chatbot"
+    # Fetch current mode using the async function from user_db.py
+    current_mode_code = await user_db.get_ai_mode_async(user_id)
+    # Ensure default mode is set in DB if get_ai_mode_async returned default because no record found
+    if current_mode_code == 'chatbot': # Assuming 'chatbot' is the default from get_ai_mode_async
+        # Check if it was actually in DB or just a default return
+        def _check_and_set_default_mode():
+            mode_doc_check = user_db.ai_mode_collection.find_one({"user_id": user_id}) # Direct check
+            if not mode_doc_check or 'mode' not in mode_doc_check:
+                user_db.ai_mode_collection.update_one({"user_id": user_id}, {"$set": {"mode": "chatbot"}}, upsert=True)
+        await asyncio.to_thread(_check_and_set_default_mode)
+
     current_mode_label = modes.get(current_mode_code, "Chatbot") 
     
     # Translate "Current mode:" and the current mode's label
@@ -78,11 +93,8 @@ async def change_assistant_mode_callback(callback_query: types.CallbackQuery, bo
     user_id = callback_query.from_user.id
     new_mode_code = callback_query.data.split("_")[2] 
 
-    ai_mode_collection.update_one(
-        {"user_id": user_id},
-        {"$set": {"mode": new_mode_code}},
-        upsert=True
-    )
+    # Use the async function from user_db.py to set the mode
+    await user_db.set_ai_mode_async(user_id, new_mode_code)
 
     current_mode_label = modes.get(new_mode_code, "Chatbot")
     
@@ -125,11 +137,16 @@ async def change_assistant_mode_callback(callback_query: types.CallbackQuery, bo
     )
     await callback_query.answer(alert_text_translated)
 
-# Synchronous helper function (consider making async or moving to a db utility module)
-def get_current_ai_mode(user_id: int) -> str: 
-    user_mode_doc = ai_mode_collection.find_one({"user_id": user_id})
-    if user_mode_doc and 'mode' in user_mode_doc:
-        return user_mode_doc['mode']
-    # Default to "chatbot" and optionally store it if not found
-    # ai_mode_collection.update_one({"user_id": user_id}, {"$set": {"mode": "chatbot"}}, upsert=True)
-    return "chatbot"
+# Synchronous helper function is now replaced by user_db.get_ai_mode_async
+# If still needed for synchronous parts of the code (not recommended from async flow),
+# it would need to use the synchronous user_db functions or direct PyMongo.
+# For Aiogram handlers, always use the async version.
+# def get_current_ai_mode(user_id: int) -> str: 
+#     # This would be a synchronous call, ensure it's not called from async event loop directly
+#     mode_doc = user_db.ai_mode_collection.find_one({"user_id": user_id}) # Direct usage for example
+#     if mode_doc and 'mode' in mode_doc:
+#         return mode_doc['mode']
+#     return "chatbot"
+
+# For this migration, we assume all calls from handlers will be to async versions.
+# The get_current_ai_mode function is removed to avoid confusion and enforce async usage.

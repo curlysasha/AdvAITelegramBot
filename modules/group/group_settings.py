@@ -1,176 +1,127 @@
-from pyrogram import Client, filters
-import pyrogram.errors
-from pyrogram.enums import ChatType
 import asyncio
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
-from config import LOG_CHANNEL as STCLOG, DATABASE_URL, ADMINS, OWNER_ID
 import logging
-from pymongo import MongoClient
-from typing import List, Dict, Optional, Union
+from typing import Optional, Tuple, Union # Added Union
 from datetime import datetime
-from modules.maintenance import maintenance_check, maintenance_message, is_feature_enabled
 
-# Set up logger
+from aiogram import Bot, types
+from aiogram.enums import ChatType, ChatMemberStatus # For chat type and member status checks
+from aiogram.exceptions import TelegramAPIError # For specific error handling
+
+from pymongo import MongoClient
+
+from config import LOG_CHANNEL as STCLOG, DATABASE_URL, ADMINS, OWNER_ID
+# Assuming these are or will be Aiogram-compatible
+from modules.maintenance import maintenance_check, maintenance_message, is_feature_enabled 
+
 logger = logging.getLogger(__name__)
+# No router needed in this file if it only contains utility functions.
+# Handlers will be in a separate group/handlers.py or admin/handlers.py file.
 
-# Connect to MongoDB
-client = MongoClient(DATABASE_URL)  
-db = client['aibotdb']  
+# MongoDB Client (Consider centralizing DB client initialization)
+mongo_client = MongoClient(DATABASE_URL)  
+db = mongo_client['aibotdb']  
 groups_collection = db.groups 
 
-async def leave_group(client: Client, message):
-    chat_id = message.chat.id
-    bot_username = (await client.get_me()).username
-    group_id = int(message.command[1])
-    
+async def is_group_admin_utility(bot: Bot, chat_id: int, user_id: int) -> bool: # Renamed for clarity
+    """Check if a user is an admin or creator in a group using Aiogram."""
     try:
-        await client.leave_chat(group_id)
-        await message.reply("Left the group successfully.")
-        await client.send_message(STCLOG, f"#Leave\n Admin-SudoUsers {chat_id} \nReason- Admin Knows\nTask - @{bot_username} left the group {group_id}.")
-    except pyrogram.errors.FloodWait as e:
-        await message.reply(f"Failed to leave the group. Please try again later. Error: {e}")
-    except pyrogram.errors.exceptions.ChatAdminRequired as e:
-        await message.reply(f"I don't have the necessary permissions to leave the group. Please make sure I have the permission to leave. Error: {e}")
+        member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]
+    except TelegramAPIError as e: 
+        logger.error(f"Error checking group admin status for user {user_id} in chat {chat_id}: {e}")
+        return False
     except Exception as e:
-        await message.reply(f"Failed to leave the group. Error: {e}")
+        logger.error(f"Unexpected error checking group admin status: {e}")
+        return False
 
-async def invite_command(client, message):
-    if len(message.command) != 2:
-        await message.reply("Invalid command! Please provide a group ID.")
-        return
-    chat_id = message.text.split(" ")[1]
+async def leave_group_utility(bot: Bot, chat_id_to_leave: int, leaving_user_id: int) -> Tuple[bool, str]:
+    """
+    Utility function for the bot to leave a specific group.
+    Returns (success_status, message_to_reply_with).
+    Called by an admin command handler.
+    """
+    bot_info = await bot.get_me()
+    bot_username = bot_info.username
 
     try:
-        chat_invite_link = await client.export_chat_invite_link(int(chat_id))
-        await message.reply_text(f"Invite link for group {chat_id}:\n{chat_invite_link}")
-    except Exception as e:
-        await message.reply_text(f"Failed to get invite link for group {chat_id}.\nError: {e}")
-
-async def leave_group(client: Client, message: Message) -> None:
-    """
-    Handle leaving a group through admin command
-    
-    Args:
-        client: Telegram client
-        message: Message with command
-    """
-    # Check maintenance mode and admin status
-    if await maintenance_check(message.from_user.id) and message.from_user.id not in ADMINS:
-        maint_msg = await maintenance_message(message.from_user.id)
-        await message.reply(maint_msg)
-        return
+        await bot.leave_chat(chat_id_to_leave)
+        logger.info(f"Bot @{bot_username} left group {chat_id_to_leave} initiated by user {leaving_user_id}.")
         
-    user_id = message.from_user.id
-    chat_id = message.chat.id
-    
-    # Check if the message is in a group
-    if message.chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
-        print(message.chat.type)    
-        await message.reply_text("This command can only be used in groups.")
-        return
-    
-    
-    # Check if admin (custom check in case ADMINS list is outdated)
-    if user_id in ADMINS or user_id == OWNER_ID or await is_group_admin(client, chat_id, user_id):
-        # Confirm leaving
-        await message.reply_text("Leaving this group, goodbye!")
-        
-        # Update the database
         try:
             groups_collection.update_one(
-                {"chat_id": chat_id},
+                {"chat_id": chat_id_to_leave},
                 {"$set": {
                     "left": True,
                     "left_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "left_by": user_id
+                    "left_by": leaving_user_id
                 }},
-                upsert=True
+                upsert=True 
             )
-        except Exception as e:
-            logger.error(f"Error updating database when leaving group: {e}")
-        
-        # Leave the group
-        try:
-            await client.leave_chat(chat_id)
-        except Exception as e:
-            logger.error(f"Error leaving group: {e}")
-    else:
-        await message.reply_text("Only admins can use this command.")
+        except Exception as e_db:
+            logger.error(f"Error updating database after leaving group {chat_id_to_leave}: {e_db}")
 
-async def invite_command(client: Client, message: Message) -> None:
-    """
-    Handle invite command to get group invite link
-    
-    Args:
-        client: Telegram client
-        message: Message with command
-    """
-    # Check maintenance mode and admin status
-    if await maintenance_check(message.from_user.id) and message.from_user.id not in ADMINS:
-        maint_msg = await maintenance_message(message.from_user.id)
-        await message.reply(maint_msg)
-        return
-        
-    user_id = message.from_user.id
-    
-    # Check if admin 
-    if user_id in ADMINS or user_id == OWNER_ID:
-        # Extract chat_id from command
-        try:
-            parts = message.text.split()
-            if len(parts) > 1:
-                target_chat = parts[1]
-                
-                # Try to get invite link
-                try:
-                    if target_chat.startswith("@"):
-                        # It's a username
-                        chat = await client.get_chat(target_chat)
-                        chat_id = chat.id
-                        chat_title = chat.title
-                    else:
-                        # Assume it's a chat ID
-                        chat_id = int(target_chat)
-                        chat = await client.get_chat(chat_id)
-                        chat_title = chat.title
-                    
-                    invite_link = await client.create_chat_invite_link(chat_id)
-                    
-                    # Send the invite link
-                    await message.reply_text(
-                        f"🔗 **Invite Link for {chat_title}**\n\n"
-                        f"{invite_link.invite_link}\n\n"
-                        f"Expires: {'Never' if not invite_link.expire_date else invite_link.expire_date}\n"
-                        f"Created by: [You](tg://user?id={user_id})"
-                    )
-                except Exception as e:
-                    await message.reply_text(f"Error getting invite link: {str(e)}")
-                    logger.error(f"Error getting invite link: {e}")
-            else:
-                await message.reply_text(
-                    "Please specify a chat ID or username.\n\n"
-                    "Usage: `/invite @chatusername` or `/invite -1001234567890`"
+        if STCLOG:
+            try:
+                log_chat_id = int(STCLOG)
+                await bot.send_message(
+                    log_chat_id, 
+                    f"#GroupLeave\nBot: @{bot_username}\nGroup ID: {chat_id_to_leave}\nInitiated by: User {leaving_user_id}"
                 )
-        except Exception as e:
-            await message.reply_text(f"Error processing command: {str(e)}")
-            logger.error(f"Error in invite command: {e}")
-    else:
-        await message.reply_text("Only admins can use this command.")
-
-async def is_group_admin(client: Client, chat_id: int, user_id: int) -> bool:
-    """
-    Check if a user is an admin in a group
-    
-    Args:
-        client: Telegram client
-        chat_id: Chat ID to check
-        user_id: User ID to check
+            except ValueError: logger.error(f"Invalid STCLOG channel ID: {STCLOG}")
+            except Exception as e_log: logger.error(f"Failed to send leave log to STCLOG: {e_log}")
         
-    Returns:
-        True if user is admin, False otherwise
+        return True, f"Left the group {chat_id_to_leave} successfully."
+
+    except TelegramAPIError as e:
+        logger.error(f"Telegram API error leaving group {chat_id_to_leave}: {e}")
+        return False, f"Failed to leave group {chat_id_to_leave}. API Error: {e.message}"
+    except Exception as e:
+        logger.error(f"Unexpected error leaving group {chat_id_to_leave}: {e}")
+        return False, f"Failed to leave group {chat_id_to_leave}. Error: {str(e)}"
+
+
+async def get_invite_link_utility(bot: Bot, target_chat_id_str: str, requesting_user_id: int) -> Tuple[Optional[str], str]:
+    """
+    Utility function to create or get an invite link for a chat.
+    Returns (invite_link_string_or_None, message_to_reply_with).
+    Called by an admin command handler.
     """
     try:
-        member = await client.get_chat_member(chat_id, user_id)
-        return member.status in ["creator", "administrator"]
-    except Exception:
-        return False
+        target_chat_id: Union[int, str]
+        if target_chat_id_str.startswith("@"):
+            target_chat_id = target_chat_id_str 
+        else:
+            try:
+                target_chat_id = int(target_chat_id_str)
+            except ValueError:
+                return None, "Invalid chat ID format. Must be an integer or a @username."
+        
+        chat = await bot.get_chat(target_chat_id)
+        chat_id_for_link = chat.id 
+        chat_title = chat.title or f"Chat {chat_id_for_link}"
+
+        invite_link_obj = await bot.create_chat_invite_link(chat_id=chat_id_for_link)
+        
+        link_info_text = (f"🔗 **Invite Link for {chat_title}**\n\n"
+                          f"{invite_link_obj.invite_link}\n\n")
+        if invite_link_obj.expire_date:
+            link_info_text += f"Expires: {invite_link_obj.expire_date.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+        else:
+            link_info_text += "Expires: Never\n"
+        link_info_text += f"Created by: Bot (requested by user {requesting_user_id})"
+
+        return invite_link_obj.invite_link, link_info_text
+
+    except TelegramAPIError as e:
+        logger.error(f"Telegram API error getting invite link for {target_chat_id_str}: {e}")
+        return None, f"Failed to get invite link for {target_chat_id_str}. Error: {e.message}"
+    except Exception as e:
+        logger.error(f"Unexpected error getting invite link for {target_chat_id_str}: {e}")
+        return None, f"Failed to get invite link for {target_chat_id_str}. Error: {str(e)}"
+
+# The `leave_group` function that takes message.chat.id (for leaving current group)
+# will be implemented as a command handler in `group/handlers.py` or `admin/handlers.py`
+# which might call `is_group_admin_utility` for permission checks.
+# The original file had a `leave_group` that seemed to operate on the current chat context.
+# That logic is better placed in a handler that then calls a utility if needed.
+# The `leave_group_utility` here is for targeted leaving by ID.

@@ -45,9 +45,9 @@ LOGO = "https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExdnp4MnR0YXk3ZGNjenR6NG
 
 @start_router.message(CommandStart())
 async def start_command(message: types.Message, bot: Bot):
-    await user_db.check_and_add_user(message.from_user.id)
+    await user_db.check_and_add_user_async(message.from_user.id)
     if message.from_user.username:
-        await user_db.check_and_add_username(message.from_user.id, message.from_user.username)
+        await user_db.check_and_add_username_async(message.from_user.id, message.from_user.username)
 
     # Get user info
     user_id = message.from_user.id
@@ -55,7 +55,7 @@ async def start_command(message: types.Message, bot: Bot):
     mention = message.from_user.mention_html() 
     
     # First safely format the welcome text with mention preservation
-    user_lang = user_db.get_user_language(user_id)
+    user_lang = await user_db.get_user_language_async(user_id) # Added await and _async
     # Assuming format_with_mention signature: (text, mention_html, user_id, lang_code)
     translated_welcome = await format_with_mention(welcome_text.replace("{user_mention}", "{mention}"), mention, user_id, user_lang)
     
@@ -94,7 +94,7 @@ async def start_menu_callback(callback_query: types.CallbackQuery, bot: Bot):
     mention = callback_query.from_user.mention_html() 
 
     # First safely format the welcome text with mention preservation
-    user_lang = user_db.get_user_language(user_id)
+    user_lang = await user_db.get_user_language_async(user_id) # Added await and _async
     translated_welcome = await format_with_mention(welcome_text.replace("{user_mention}", "{mention}"), mention, user_id, user_lang)
     
     # Translate button texts

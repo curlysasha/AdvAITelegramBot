@@ -2,10 +2,11 @@ import logging
 import asyncio
 import sys
 from datetime import datetime, timedelta
-from pyrogram import Client
-from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from pyrogram.enums import ChatType
-from pymongo import MongoClient
+from aiogram import Bot, types # For Aiogram types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile # For Aiogram
+# from pyrogram.enums import ChatType # Not used directly in this migrated version
+from pymongo import MongoClient # Keep for DB client
+import asyncio # For asyncio.to_thread
 from config import DATABASE_URL, ADMINS, OWNER_ID
 from modules.chatlogs import channel_log, error_log
 from modules.core.database import get_history_collection, get_user_collection
@@ -26,7 +27,7 @@ logger.info(f"Datetime module loaded. Current time: {datetime.now().strftime('%Y
 # Number of messages per page for pagination
 MESSAGES_PER_PAGE = 5
 
-async def get_user_chat_history(bot: Client, message: Message, user_id: int, status_msg: Message) -> None:
+async def get_user_chat_history(bot: Bot, message: types.Message, user_id: int, status_msg: types.Message) -> None:
     """
     Retrieve and provide chat history for a specific user
     
@@ -44,13 +45,16 @@ async def get_user_chat_history(bot: Client, message: Message, user_id: int, sta
         logger.info(f"Retrieving chat history for user {user_id}")
         
         # Check if user exists
-        user_data = users_collection.find_one({"user_id": user_id})
+        def _find_user_sync():
+            u_data = users_collection.find_one({"user_id": user_id})
+            if not u_data: # Try with int_user_id if initial failed (though user_id should already be int)
+                u_data = users_collection.find_one({"user_id": int(user_id)})
+            return u_data
+        user_data = await asyncio.to_thread(_find_user_sync)
+
         if not user_data:
             logger.error(f"User not found in users collection: {user_id}")
-            # Try with integer user_id
-            user_data = users_collection.find_one({"user_id": int(user_id)})
-            if not user_data:
-                await status_msg.edit_text(f"❌ **User Not Found**\n\nNo data found for user ID {user_id}.")
+            await status_msg.edit_text(f"❌ **User Not Found**\n\nNo data found for user ID {user_id}.")
                 return
             
         # Add debug logging
@@ -58,8 +62,10 @@ async def get_user_chat_history(bot: Client, message: Message, user_id: int, sta
         
         # Get chat history from the history collection
         # Ensure we're using an integer user_id for consistency
-        int_user_id = int(user_id)
-        user_history = history_collection.find_one({"user_id": int_user_id})
+        int_user_id = int(user_id) # user_id is already int
+        def _find_history_sync():
+            return history_collection.find_one({"user_id": int_user_id})
+        user_history = await asyncio.to_thread(_find_history_sync)
         
         chat_logs = []
         if user_history and 'history' in user_history:
@@ -147,7 +153,7 @@ async def get_user_chat_history(bot: Client, message: Message, user_id: int, sta
         # Send the file
         await bot.send_document(
             chat_id=message.chat.id,
-            document=filename,
+            document=FSInputFile(filename), # Use FSInputFile for local files
             caption=f"📋 **Chat History for User {user_id}**\n\n"
                    f"User: {user_data.get('first_name', '')} {user_data.get('last_name', '')}\n"
                    f"Username: @{user_data.get('username', 'None')}\n"
@@ -171,7 +177,7 @@ async def get_user_chat_history(bot: Client, message: Message, user_id: int, sta
         await status_msg.edit_text(f"❌ **Error retrieving chat history**: {str(e)}")
         await error_log(bot, "HISTORY_RETRIEVAL", str(e))
 
-async def show_history_search_panel(client: Client, callback_query: CallbackQuery) -> None:
+async def show_history_search_panel(bot: Bot, callback_query: types.CallbackQuery) -> None: # Renamed client to bot
     """
     Show the history search panel in the admin dashboard
     
@@ -181,15 +187,19 @@ async def show_history_search_panel(client: Client, callback_query: CallbackQuer
     """
     try:
         # Get users who have chat history from the history collection
-        users_with_history = list(history_collection.find({}, {"user_id": 1}))
+        def _get_users_with_history_sync():
+            return list(history_collection.find({}, {"user_id": 1}))
+        users_with_history = await asyncio.to_thread(_get_users_with_history_sync)
         user_ids = [int(user.get("user_id")) for user in users_with_history if user.get("user_id")]
         
         logger.info(f"Found {len(user_ids)} users with chat history")
         
         # Get user details for these users
         user_buttons = []
-        for user_id in user_ids[:10]:  # Limit to 10 most recent users
-            user_info = users_collection.find_one({"user_id": user_id})
+        for user_id_from_list in user_ids[:10]:  # Limit to 10 most recent users
+            def _get_user_info_sync(uid):
+                return users_collection.find_one({"user_id": uid})
+            user_info = await asyncio.to_thread(_get_user_info_sync, user_id_from_list)
             
             if user_info:
                 name = f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}"
@@ -211,7 +221,7 @@ async def show_history_search_panel(client: Client, callback_query: CallbackQuer
                 # Create button text
                 button_text = f"{name[:15]} (@{username[:10]}) - {last_active_str}"
                 user_buttons.append([InlineKeyboardButton(
-                    button_text, callback_data=f"history_user_{user_id}"
+                    button_text, callback_data=f"history_user_{user_id_from_list}" # Use user_id_from_list
                 )])
         
         # If no users found, add a message
@@ -237,16 +247,16 @@ async def show_history_search_panel(client: Client, callback_query: CallbackQuer
         ]
         
         # Edit the message with the history search panel
-        await callback_query.edit_message_text(
-            message_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+        await callback_query.message.edit_text( # Use callback_query.message.edit_text
+            text=message_text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard) # Pass inline_keyboard argument
         )
     except Exception as e:
         logger.error(f"Error showing history search panel: {e}")
         logger.exception("Detailed error in show_history_search_panel:")
-        await callback_query.answer("Error loading history panel")
+        await callback_query.answer("Error loading history panel", show_alert=True) # Added show_alert
 
-async def handle_history_user_selection(client: Client, callback_query: CallbackQuery, user_id: int) -> None:
+async def handle_history_user_selection(bot: Bot, callback_query: types.CallbackQuery, user_id: int) -> None: # Renamed client to bot
     """
     Handle user selection for viewing chat history
     
@@ -263,10 +273,13 @@ async def handle_history_user_selection(client: Client, callback_query: Callback
         )
         
         # Get user info
-        user_data = users_collection.find_one({"user_id": user_id})
+        def _get_user_data_sync():
+            return users_collection.find_one({"user_id": user_id})
+        user_data = await asyncio.to_thread(_get_user_data_sync)
+
         if not user_data:
             logger.error(f"User not found in users collection: {user_id}")
-            await callback_query.edit_message_text(
+            await callback_query.message.edit_text( # Use callback_query.message.edit_text
                 f"❌ **User Not Found**\n\n"
                 f"No data found for user ID {user_id}.",
                 reply_markup=InlineKeyboardMarkup([
@@ -277,8 +290,10 @@ async def handle_history_user_selection(client: Client, callback_query: Callback
         
         # Get chat history from the history collection
         # Ensure we're using an integer user_id for consistency
-        int_user_id = int(user_id)
-        user_history = history_collection.find_one({"user_id": int_user_id})
+        int_user_id = int(user_id) # user_id is already int
+        def _get_user_history_sync():
+            return history_collection.find_one({"user_id": int_user_id})
+        user_history = await asyncio.to_thread(_get_user_history_sync)
         
         chat_logs = []
         if user_history and 'history' in user_history:
@@ -361,9 +376,9 @@ async def handle_history_user_selection(client: Client, callback_query: Callback
         ]
         
         # Send the text file with latest messages
-        await client.send_document(
+        await bot.send_document( # Use bot
             chat_id=callback_query.message.chat.id,
-            document=filename,
+            document=FSInputFile(filename), # Use FSInputFile
             caption=f"📋 **Latest Chat History for User {user_id}**\n\n"
                    f"User: {user_data.get('first_name', '')} {user_data.get('last_name', '')}\n"
                    f"Username: @{user_data.get('username', 'None')}\n"
@@ -372,7 +387,7 @@ async def handle_history_user_selection(client: Client, callback_query: Callback
         )
         
         # Update the original message
-        await callback_query.edit_message_text(
+        await callback_query.message.edit_text( # Use callback_query.message.edit_text
             f"✅ **Chat History Loaded**\n\n"
             f"User: {user_data.get('first_name', '')} {user_data.get('last_name', '')}\n"
             f"The latest messages have been sent as a text file above.\n"
@@ -390,7 +405,7 @@ async def handle_history_user_selection(client: Client, callback_query: Callback
         logger.error(f"Error handling history user selection: {e}")
         logger.exception("Detailed error:")
         await callback_query.answer("Error loading history", show_alert=True)
-        await callback_query.edit_message_text(
+        await callback_query.message.edit_text( # Use callback_query.message.edit_text
             f"❌ **Error**\n\n"
             f"Failed to retrieve chat history. Please try again later.",
             reply_markup=InlineKeyboardMarkup([
@@ -398,7 +413,7 @@ async def handle_history_user_selection(client: Client, callback_query: Callback
             ])
         )
 
-async def handle_history_pagination(client: Client, callback_query: CallbackQuery, user_id: int, page: int) -> None:
+async def handle_history_pagination(bot: Bot, callback_query: types.CallbackQuery, user_id: int, page: int) -> None: # Renamed client to bot
     """
     Handle pagination for viewing chat history
     
@@ -413,19 +428,24 @@ async def handle_history_pagination(client: Client, callback_query: CallbackQuer
         skip = (page - 1) * MESSAGES_PER_PAGE
         
         # Get user info
-        user_data = users_collection.find_one({"user_id": user_id})
+        def _get_user_data_sync_pagination():
+            return users_collection.find_one({"user_id": user_id})
+        user_data = await asyncio.to_thread(_get_user_data_sync_pagination)
+
         if not user_data:
             logger.error(f"User not found in users collection: {user_id}")
             await callback_query.answer("User not found", show_alert=True)
-            await callback_query.edit_message_text(
+            await callback_query.message.edit_text( # Use callback_query.message.edit_text
                 "❌ **User Not Found**\n\nThis user no longer exists in the database."
             )
             return
         
         # Get chat history from the history collection
         # Ensure we're using an integer user_id for consistency
-        int_user_id = int(user_id)
-        user_history = history_collection.find_one({"user_id": int_user_id})
+        int_user_id = int(user_id) # user_id is already int
+        def _get_user_history_sync_pagination():
+            return history_collection.find_one({"user_id": int_user_id})
+        user_history = await asyncio.to_thread(_get_user_history_sync_pagination)
         
         chat_logs = []
         if user_history and 'history' in user_history:
@@ -531,23 +551,23 @@ async def handle_history_pagination(client: Client, callback_query: CallbackQuer
         keyboard.append(action_row)
         
         # Edit message with paginated history
-        await callback_query.edit_message_text(
-            message_text,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+        await callback_query.message.edit_text( # Use callback_query.message.edit_text
+            text=message_text, # Pass text argument
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard) # Pass inline_keyboard
         )
             
     except Exception as e:
         logger.error(f"Error handling history pagination: {e}")
         logger.exception("Detailed error:")
         await callback_query.answer("Error displaying history", show_alert=True)
-        await callback_query.edit_message_text(
+        await callback_query.message.edit_text( # Use callback_query.message.edit_text
             "❌ **Error Displaying History**\n\nAn error occurred while retrieving chat history.",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("⬅️ Back", callback_data="history_search")]
             ])
         )
 
-async def get_history_download(client: Client, callback_query: CallbackQuery, user_id: int) -> None:
+async def get_history_download(bot: Bot, callback_query: types.CallbackQuery, user_id: int) -> None: # Renamed client to bot
     """
     Generate and send a downloadable chat history file
     
@@ -567,19 +587,24 @@ async def get_history_download(client: Client, callback_query: CallbackQuery, us
         )
         
         # Get user info
-        user_data = users_collection.find_one({"user_id": user_id})
+        def _get_user_data_sync_download():
+            return users_collection.find_one({"user_id": user_id})
+        user_data = await asyncio.to_thread(_get_user_data_sync_download)
+
         if not user_data:
             logger.error(f"User not found in users collection: {user_id}")
             await callback_query.answer("User not found", show_alert=True)
-            await callback_query.edit_message_text(
+            await callback_query.message.edit_text( # Use callback_query.message.edit_text
                 "❌ **User Not Found**\n\nThis user no longer exists in the database."
             )
             return
         
         # Get chat history from the history collection
         # Ensure we're using an integer user_id for consistency
-        int_user_id = int(user_id)
-        user_history = history_collection.find_one({"user_id": int_user_id})
+        int_user_id = int(user_id) # user_id is already int
+        def _get_user_history_sync_download():
+            return history_collection.find_one({"user_id": int_user_id})
+        user_history = await asyncio.to_thread(_get_user_history_sync_download)
         
         chat_logs = []
         if user_history and 'history' in user_history:
@@ -667,9 +692,9 @@ async def get_history_download(client: Client, callback_query: CallbackQuery, us
                     f.write("-" * 80 + "\n\n")
         
         # Send the file
-        await client.send_document(
+        await bot.send_document( # Use bot
             chat_id=callback_query.message.chat.id,
-            document=filename,
+            document=FSInputFile(filename), # Use FSInputFile
             caption=f"📋 **Complete Chat History for User {user_id}**\n\n"
                    f"User: {user_data.get('first_name', '')} {user_data.get('last_name', '')}\n"
                    f"Username: @{user_data.get('username', 'None')}\n"
@@ -686,7 +711,7 @@ async def get_history_download(client: Client, callback_query: CallbackQuery, us
             logger.error(f"Error removing temporary file: {e}")
         
         # Update success message
-        await callback_query.edit_message_text(
+        await callback_query.message.edit_text( # Use callback_query.message.edit_text
             f"✅ **Download Complete**\n\n"
             f"Chat history for user {user_id} has been generated and sent as a file.\n"
             f"Total messages: {len(chat_logs)}",
@@ -699,14 +724,14 @@ async def get_history_download(client: Client, callback_query: CallbackQuery, us
         logger.error(f"Error generating history download: {e}")
         logger.exception("Detailed error:")
         await callback_query.answer("Error generating download", show_alert=True)
-        await callback_query.edit_message_text(
+        await callback_query.message.edit_text( # Use callback_query.message.edit_text
             "❌ **Error Generating Download**\n\nAn error occurred while creating the chat history file.",
-            reply_markup=InlineKeyboardMarkup([
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[ # Pass inline_keyboard
                 [InlineKeyboardButton("⬅️ Back", callback_data=f"history_page_{user_id}_1")]
             ])
         )
 
-async def show_user_search_form(client: Client, callback_query: CallbackQuery) -> None:
+async def show_user_search_form(bot: Bot, callback_query: types.CallbackQuery) -> None: # Renamed client to bot
     """
     Show a form to search for user chat history by user ID
     
@@ -716,31 +741,35 @@ async def show_user_search_form(client: Client, callback_query: CallbackQuery) -
     """
     try:
         # Get the session collection
-        from modules.core.database import get_session_collection
-        session_collection = get_session_collection()
+        from modules.core.database import get_session_collection # This import is fine
+        session_collection = get_session_collection() # This returns a synchronous PyMongo collection
         
-        # Clear any existing session first
-        session_collection.update_one(
-            {"user_id": callback_query.from_user.id},
-            {"$unset": {
-                "awaiting_user_id_for_history": "",
-                "message_id": ""
-            }},
-            upsert=True
-        )
-        
-        # Set the session flag for awaiting user ID input
-        session_collection.update_one(
-            {"user_id": callback_query.from_user.id},
-            {"$set": {
-                "awaiting_user_id_for_history": True,
-                "message_id": callback_query.message.id
-            }},
-            upsert=True
-        )
+        # Wrap DB calls for session management
+        def _update_session_sync():
+            # Clear any existing session first
+            session_collection.update_one(
+                {"user_id": callback_query.from_user.id},
+                {"$unset": {
+                    "awaiting_user_id_for_history": "",
+                    "message_id": ""
+                }},
+                # upsert=True # Not needed for $unset if document might not exist
+            )
+            # Set the session flag for awaiting user ID input
+            session_collection.update_one(
+                {"user_id": callback_query.from_user.id},
+                {"$set": {
+                    "awaiting_user_id_for_history": True,
+                    # Storing message.id might be problematic if message is deleted or bot restarts without persistent FSM
+                    # For simple state, this is okay, but Aiogram FSM is better for robust state.
+                    "message_id_to_edit_for_history_search": callback_query.message.message_id 
+                }},
+                upsert=True
+            )
+        await asyncio.to_thread(_update_session_sync)
         
         # Show the search form
-        await callback_query.edit_message_text(
+        await callback_query.message.edit_text( # Use callback_query.message.edit_text
             "🔍 **Search User Chat History**\n\n"
             "Please enter the user ID you want to search for in your next message.\n\n"
             "Example: `123456789`\n\n"

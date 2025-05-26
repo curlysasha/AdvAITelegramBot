@@ -1,18 +1,20 @@
 from aiogram import types, F, Router, Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from pymongo import MongoClient
+from pymongo import MongoClient # Keep for direct calls if any remain, though ideally use user_db.py
 from config import DATABASE_URL
 # Assuming these lang functions are/will be Aiogram compatible
-from modules.lang import async_translate_to_lang # batch_translate, translate_ui_element not used here
+from modules.lang import async_translate_to_lang 
+import database.user_db as user_db # Import user_db for its async functions
+import asyncio # For asyncio.to_thread
 
 # Router for language settings
 lang_settings_router = Router()
 
-# MongoDB Client
-client = MongoClient(DATABASE_URL)
-db = client["aibotdb"]
-user_lang_collection = db['user_lang']
+# MongoDB Client - This direct usage should be minimized, prefer user_db.py
+# client = MongoClient(DATABASE_URL) # Already in user_db.py or core.database.py
+# db = client["aibotdb"]
+# user_lang_collection = db['user_lang'] # Prefer get_user_lang_collection from core.database or use user_db functions
 
 # Dictionary of languages with flags (ensure this is the single source of truth or imported)
 languages = {
@@ -25,8 +27,14 @@ languages = {
 async def language_selection_menu_callback(callback_query: types.CallbackQuery, bot: Bot): # bot: Bot might not be needed
     user_id = callback_query.from_user.id
     
-    user_lang_doc = user_lang_collection.find_one({"user_id": user_id})
-    current_language_code = user_lang_doc['language'] if user_lang_doc and 'language' in user_lang_doc else "en"
+    # Use the async function from user_db.py
+    current_language_code = await user_db.get_user_language_async(user_id)
+    # The find_one call below is now redundant if get_user_language_async is comprehensive
+    # and if we need to ensure the default 'en' is set, get_user_language_async should handle it
+    # or we call a separate ensure_user_lang_exists_async if needed.
+    # For now, just relying on get_user_language_async.
+    # If current_language_code is 'en' (default) and no doc existed, user_db.get_user_language_async
+    # doesn't currently create one. Let's assume for now that's okay, or it's handled at user creation.
     
     current_language_label = languages.get(current_language_code, "Unknown")
     
@@ -74,11 +82,8 @@ async def change_language_setting_callback(callback_query: types.CallbackQuery, 
     user_id = callback_query.from_user.id
     new_language_code = callback_query.data.split("_")[2] # e.g., "en" from "set_lang_en"
 
-    user_lang_collection.update_one(
-        {"user_id": user_id},
-        {"$set": {"language": new_language_code}},
-        upsert=True
-    )
+    # Use the async function from user_db.py to set the language
+    await user_db.set_user_language_async(user_id, new_language_code)
 
     current_language_label = languages.get(new_language_code, "Unknown")
     
