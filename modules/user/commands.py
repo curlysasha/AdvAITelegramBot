@@ -1,9 +1,5 @@
-import pyrogram
-from pyrogram import filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.types import Message
-from pyrogram.types import InlineQuery
-from pyrogram.types import CallbackQuery
+from aiogram import Router
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from modules.lang import async_translate_to_lang, batch_translate, translate_ui_element
 from modules.chatlogs import channel_log
 from config import ADMINS
@@ -95,124 +91,81 @@ These commands are restricted to bot administrators only.
 """
 
 
-async def command_inline(client, callback):
+router = Router()
+
+@router.callback_query(lambda c: c.data == "commands")
+async def command_inline(callback: CallbackQuery):
     user_id = callback.from_user.id
-    
-    # Translate the command text and buttons
     texts_to_translate = [command__text, "🧠 AI Response", "🖼️ Image Generation", "📋 Main Commands", "🔙 Back"]
     translated_texts = await batch_translate(texts_to_translate, user_id)
-    
-    # Extract translated results
     translated_command = translated_texts[0]
     ai_btn = translated_texts[1]
     img_btn = translated_texts[2]
     main_btn = translated_texts[3]
     back_btn = translated_texts[4]
-    
-    # Create base keyboard
     keyboard_buttons = [
         [InlineKeyboardButton(ai_btn, callback_data="cmd_ai")],
         [InlineKeyboardButton(img_btn, callback_data="cmd_img")],
         [InlineKeyboardButton(main_btn, callback_data="cmd_main")]
     ]
-    
-    # Add admin button if user is an admin
     if user_id in ADMINS:
         admin_btn = "⚙️ Admin Commands"
         keyboard_buttons.append([InlineKeyboardButton(admin_btn, callback_data="cmd_admin")])
-    
-    # Add back button
     keyboard_buttons.append([InlineKeyboardButton(back_btn, callback_data="back")])
-    
-    keyboard = InlineKeyboardMarkup(keyboard_buttons)
-
-    await client.edit_message_text(
-        chat_id=callback.message.chat.id,
-        message_id=callback.message.id,
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    await callback.message.edit_text(
         text=translated_command,
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
-
     await callback.answer()
-    return
 
-async def handle_command_callbacks(client, callback):
+@router.callback_query(lambda c: c.data.startswith("cmd_"))
+async def handle_command_callbacks(callback: CallbackQuery):
     user_id = callback.from_user.id
     callback_data = callback.data
-    
     if callback_data == "cmd_ai":
-        # Show AI commands
         translated_text = await async_translate_to_lang(ai_commands_text, user_id)
         back_btn = await translate_ui_element("🔙 Back to Commands", user_id)
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(back_btn, callback_data="commands")]
-        ])
-        
-        await client.edit_message_text(
-            chat_id=callback.message.chat.id,
-            message_id=callback.message.id,
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(back_btn, callback_data="commands")]])
+        await callback.message.edit_text(
             text=translated_text,
             reply_markup=keyboard,
             disable_web_page_preview=True
         )
-        
     elif callback_data == "cmd_img":
-        # Show Image commands
         translated_text = await async_translate_to_lang(image_commands_text, user_id)
         back_btn = await translate_ui_element("🔙 Back to Commands", user_id)
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(back_btn, callback_data="commands")]
-        ])
-        
-        await client.edit_message_text(
-            chat_id=callback.message.chat.id,
-            message_id=callback.message.id,
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(back_btn, callback_data="commands")]])
+        await callback.message.edit_text(
             text=translated_text,
             reply_markup=keyboard,
             disable_web_page_preview=True
         )
-        
     elif callback_data == "cmd_main":
-        # Show main commands
         translated_text = await async_translate_to_lang(main_commands_text, user_id)
         back_btn = await translate_ui_element("🔙 Back to Commands", user_id)
-        
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(back_btn, callback_data="commands")]
-        ])
-        
-        await client.edit_message_text(
-            chat_id=callback.message.chat.id,
-            message_id=callback.message.id,
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(back_btn, callback_data="commands")]])
+        await callback.message.edit_text(
             text=translated_text,
             reply_markup=keyboard,
             disable_web_page_preview=True
         )
-    
     elif callback_data == "cmd_admin":
-        # Show admin commands (only for admins)
         if user_id in ADMINS:
             back_btn = await translate_ui_element("🔙 Back to Commands", user_id)
-            
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton(back_btn, callback_data="commands")]
-            ])
-            
-            await client.edit_message_text(
-                chat_id=callback.message.chat.id,
-                message_id=callback.message.id,
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(back_btn, callback_data="commands")]])
+            await callback.message.edit_text(
                 text=admin_commands_text,
                 reply_markup=keyboard,
                 disable_web_page_preview=True
             )
         else:
-            # User is not an admin, show unauthorized message
             await callback.answer("You don't have permission to view admin commands", show_alert=True)
-    
     await callback.answer()
-    return
+
+
+def register_command_handlers(dp: Router):
+    dp.include_router(router)
 
 

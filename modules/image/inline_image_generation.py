@@ -9,22 +9,14 @@ from datetime import datetime
 from typing import List, Optional, Dict, Tuple
 import requests
 import io
-
-from pyrogram import Client
-from pyrogram.types import (
-    InlineQuery, 
-    InlineQueryResultPhoto, 
-    InlineQueryResultArticle,
-    InputTextMessageContent,
-    InlineQueryResultCachedPhoto,
-    InputMediaPhoto,
-    Message
-)
-from pyrogram.errors import QueryIdInvalid, MessageNotModified
-
 from ImgGenModel.g4f.client import Client as ImageClient
 from ImgGenModel.g4f.Provider import PollinationsAI
 from config import LOG_CHANNEL
+from aiogram import Router
+from aiogram.types import InlineQuery, InlineQueryResultPhoto, InlineQueryResultArticle, InputTextMessageContent
+from aiogram import Bot
+
+router = Router()
 
 # Get the logger
 logger = logging.getLogger(__name__)
@@ -326,7 +318,8 @@ def clear_user_cache(user_id: int) -> None:
         del temp_query_cache[user_id]
         logger.info(f"Cleared temporary query cache for user {user_id}")
 
-async def handle_inline_query(client: Client, inline_query: InlineQuery) -> None:
+@router.inline_query()
+async def handle_inline_query(inline_query: InlineQuery):
     """Handle inline queries for image generation and AI responses
     
     This function processes inline queries and:
@@ -357,8 +350,6 @@ async def handle_inline_query(client: Client, inline_query: InlineQuery) -> None
                 ],
                 cache_time=1
             )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for empty query from user {user_id}")
         except Exception as e:
             logger.error(f"Error answering empty inline query: {str(e)}")
         return
@@ -392,8 +383,6 @@ async def handle_inline_query(client: Client, inline_query: InlineQuery) -> None
                     ],
                     cache_time=1
                 )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for incomplete image prompt from user {user_id}")
             except Exception as e:
                 logger.error(f"Error answering incomplete image query: {str(e)}")
         else:
@@ -413,8 +402,6 @@ async def handle_inline_query(client: Client, inline_query: InlineQuery) -> None
                     ],
                     cache_time=1
                 )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for incomplete AI prompt from user {user_id}")
             except Exception as e:
                 logger.error(f"Error answering incomplete AI query: {str(e)}")
         return
@@ -425,21 +412,20 @@ async def handle_inline_query(client: Client, inline_query: InlineQuery) -> None
         prompt = query[6:-1].strip()
         
         # Call the original image generation function
-        await handle_image_generation_query(client, inline_query, prompt)
+        await handle_image_generation_query(inline_query, prompt)
     else:
         # Handle AI response request
         # Remove the ending "." or "?" from the prompt
         prompt = query[:-1].strip()
         
         # Call the AI response handler
-        await handle_inline_ai_query(client, inline_query, prompt)
+        await handle_inline_ai_query(inline_query, prompt)
 
 # Extract the original image generation logic into a separate function
-async def handle_image_generation_query(client: Client, inline_query: InlineQuery, prompt: str) -> None:
+async def handle_image_generation_query(inline_query: InlineQuery, prompt: str) -> None:
     """Handle inline queries specifically for image generation
     
     Args:
-        client: Pyrogram client instance
         inline_query: The inline query object
         prompt: The processed prompt text (without the ending period)
     """
@@ -462,8 +448,6 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                 ],
                 cache_time=1
             )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for short prompt from user {user_id}")
         except Exception as e:
             logger.error(f"Error answering short prompt inline query: {str(e)}")
         return
@@ -485,8 +469,6 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                 ],
                 cache_time=1
             )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for cache clear from user {user_id}")
         except Exception as e:
             logger.error(f"Error answering cache clear command: {str(e)}")
         return
@@ -498,7 +480,7 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
             # Respond immediately with cached image
             await inline_query.answer(
                 results=[
-                    InlineQueryResultCachedPhoto(
+                    InlineQueryResultPhoto(
                         photo_file_id=cached_file_id,
                         title=f"AI Generated Image",
                         description=prompt,
@@ -521,7 +503,7 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                     "is_cache_refresh": True
                 }
                 # Start background generation to refresh cache
-                asyncio.create_task(generate_and_cache_image(client, user_id, prompt, task_id))
+                asyncio.create_task(generate_and_cache_image(user_id, prompt, task_id))
                 
             return
         except Exception as e:
@@ -547,8 +529,6 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                     ],
                     cache_time=1
                 )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for ongoing generation message from user {user_id}")
             except Exception as e:
                 logger.error(f"Error answering ongoing generation message: {str(e)}")
             return
@@ -606,8 +586,6 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                     ],
                     cache_time=5
                 )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for failed generation from user {user_id}")
             except Exception as e:
                 logger.error(f"Error answering failed generation: {str(e)}")
             
@@ -628,12 +606,10 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
             if not os.path.exists(local_path):
                 logger.error(f"Local file does not exist: {local_path}")
                 continue
-                
             try:
-                # Upload the photo to get the file_id
-                sent_photo = await client.send_photo(
+                sent_photo = await inline_query.bot.send_photo(
                     chat_id=LOG_CHANNEL,
-                    photo=local_path,
+                    photo=open(local_path, "rb"),
                     caption=f"#ImgLog #InlineGenerated\n**Prompt**: `{prompt}`\n"\
                             f"**User**: [User {user_id}](tg://user?id={user_id})\n"\
                             f"**Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -641,7 +617,7 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                 
                 # Get the file_id
                 if hasattr(sent_photo, 'photo') and sent_photo.photo:
-                    file_id = sent_photo.photo.file_id
+                    file_id = sent_photo.photo[-1].file_id if isinstance(sent_photo.photo, list) else sent_photo.photo.file_id
                     file_ids.append(file_id)
                     logger.info(f"Got file_id {file_id} for {local_path}")
                     
@@ -657,7 +633,7 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
         for i, file_id in enumerate(file_ids):
             # Create a cached photo result
             results.append(
-                InlineQueryResultCachedPhoto(
+                InlineQueryResultPhoto(
                     photo_file_id=file_id,
                     title=f"AI Generated Image",
                     description=prompt,
@@ -683,8 +659,6 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                     ],
                     cache_time=5
                 )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for no valid results from user {user_id}")
             except Exception as e:
                 logger.error(f"Error answering no valid results: {str(e)}")
                 
@@ -716,28 +690,6 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                 except Exception as e:
                     logger.error(f"Error cleaning up file {path}: {str(e)}")
                     
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for final results from user {user_id}")
-            
-            # Store in temp cache for later retrieval if user adds spaces to query
-            if file_ids:
-                temp_query_cache[user_id] = {
-                    "query": prompt,
-                    "file_id": file_ids[0],  # Just keep the first one
-                    "prompt": prompt,
-                    "timestamp": time.time()
-                }
-                logger.info(f"Saved image to temporary cache for user {user_id} for query recovery")
-                
-            # Clean up files
-            for path in local_paths:
-                try:
-                    if os.path.exists(path):
-                        os.remove(path)
-                        logger.info(f"Cleaned up local file after query invalid: {path}")
-                except Exception as e:
-                    logger.error(f"Error cleaning up file {path}: {str(e)}")
-                    
         except Exception as e:
             logger.error(f"Error answering with final results: {str(e)}")
             # Clean up files
@@ -765,8 +717,6 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
                 ],
                 cache_time=5
             )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for error message from user {user_id}")
         except Exception as e2:
             logger.error(f"Error answering with error message: {str(e2)}")
             
@@ -783,11 +733,10 @@ async def handle_image_generation_query(client: Client, inline_query: InlineQuer
         if task_id in ongoing_generations:
             del ongoing_generations[task_id]
 
-async def generate_and_cache_image(client: Client, user_id: int, prompt: str, task_id: str) -> None:
+async def generate_and_cache_image(bot: Bot, user_id: int, prompt: str, task_id: str) -> None:
     """Generate an image in the background and add it to the cache
     
     Args:
-        client: The Pyrogram client
         user_id: User ID requesting the generation
         prompt: The prompt text
         task_id: Task ID for tracking
@@ -807,42 +756,32 @@ async def generate_and_cache_image(client: Client, user_id: int, prompt: str, ta
         for local_path in local_paths:
             if not os.path.exists(local_path):
                 continue
-                
             try:
-                # Upload quietly to log channel
-                sent_photo = await client.send_photo(
+                sent_photo = await bot.send_photo(
                     chat_id=LOG_CHANNEL,
-                    photo=local_path,
+                    photo=open(local_path, "rb"),
                     caption=f"#ImgLog #CacheRefresh\n**Prompt**: `{prompt}`\n"\
                             f"**User**: [User {user_id}](tg://user?id={user_id})\n"\
                             f"**Time**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
                 )
-                
-                # Get file_id and update cache
                 if hasattr(sent_photo, 'photo') and sent_photo.photo:
-                    file_id = sent_photo.photo.file_id
+                    file_id = sent_photo.photo[-1].file_id if isinstance(sent_photo.photo, list) else sent_photo.photo.file_id
                     add_to_cache(user_id, file_id, prompt)
                     logger.info(f"Added new image to cache for user {user_id}")
                     break  # Just need one image for cache
             except Exception as e:
                 logger.error(f"Error uploading photo for cache refresh: {str(e)}")
-                
-            # Delete this file once uploaded
             try:
                 if os.path.exists(local_path):
                     os.remove(local_path)
                     logger.info(f"Cleaned up local file after cache refresh: {local_path}")
             except Exception as e:
                 logger.error(f"Error cleaning up file {local_path}: {str(e)}")
-                
     except Exception as e:
         logger.error(f"Error in background cache refresh: {str(e)}")
     finally:
-        # Clean up
         if task_id in ongoing_generations:
             del ongoing_generations[task_id]
-            
-        # Clean up any remaining files
         for path in local_paths:
             try:
                 if os.path.exists(path):
@@ -928,4 +867,7 @@ async def cleanup_ongoing_generations():
         except Exception as e:
             logger.error(f"Error in cleanup task: {str(e)}")
             
-        await asyncio.sleep(5)  # Run every 5 seconds for more responsive cleanup 
+        await asyncio.sleep(5)  # Run every 5 seconds for more responsive cleanup
+
+def register_inline_image_handlers(dp: Router):
+    dp.include_router(router)

@@ -1,8 +1,5 @@
-import pyrogram
-from pyrogram import filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.types import Message
-from pyrogram.types import CallbackQuery
+from aiogram import Router
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
 from modules.lang import async_translate_to_lang, batch_translate, format_with_mention, translate_ui_element
 from modules.chatlogs import channel_log
 import database.user_db as user_db
@@ -11,6 +8,8 @@ import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
+
+router = Router()
 
 # Define button texts with emojis for groups
 group_button_list = [
@@ -520,6 +519,17 @@ async def handle_group_callbacks(client, callback):
         )
     
     # Acknowledge the callback
-    await callback.answer() 
+    await callback.answer()
 
-    
+@router.message()
+async def group_start_handler(message: Message):
+    if message.chat.type in ("group", "supergroup") and message.text and message.text.startswith("/start"):
+        await group_start(message.bot, message)
+
+@router.callback_query(lambda c: c.data.startswith("group_") or c.data in ["about_bot", "group_support", "back_to_group_start"])
+async def group_callback_handler(callback: CallbackQuery):
+    await handle_group_callbacks(callback.bot, callback)
+
+def register_group_handlers(dp: Router):
+    dp.include_router(router)
+

@@ -1,12 +1,11 @@
-import pyrogram
-from pyrogram import filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.types import Message
-from pyrogram.types import InlineQuery
-from pyrogram.types import CallbackQuery
+from aiogram import Router
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import CommandStart
 from modules.lang import async_translate_to_lang, batch_translate, format_with_mention
 from modules.chatlogs import channel_log
 import database.user_db as user_db
+
+router = Router()
 
 # Define button texts with emojis
 button_list = [
@@ -37,71 +36,17 @@ I can help you with:
 **Select a button below to get started!**
 """
 
-tip_text = "💡 **Pro Tip:** Type any message to start chatting with me,OR\nuse /img with your prompt to generate images!\n**For more commands use /help.**"
-
-LOGO = "https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExdnp4MnR0YXk3ZGNjenR6NGRoaDNkc2h2NDgxa285NnExaGM1MTZmYyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/S60CrN9iMxFlyp7uM8/giphy.gif"
-
-async def start(client, message):
-    await user_db.check_and_add_user(message.from_user.id)
-    if message.from_user.username:
-        await user_db.check_and_add_username(message.from_user.id, message.from_user.username)
-
-    # Get user info
-    user_id = message.from_user.id
-    mention = message.from_user.mention
-    
-    # First safely format the welcome text with mention preservation
-    user_lang = user_db.get_user_language(user_id)
-    translated_welcome = await format_with_mention(welcome_text.replace("{user_mention}", "{mention}"), mention, user_id, user_lang)
-    
-    # Translate other texts
-    translated_texts = await batch_translate([tip_text] + button_list, user_id)
-    translated_tip = translated_texts[0]
-    translated_buttons = translated_texts[1:]
-
-    # Create the inline keyboard buttons with translated text
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(translated_buttons[0], url=f"https://t.me/{client.me.username}?startgroup=true")],
-        [InlineKeyboardButton(translated_buttons[1], callback_data="commands"),
-         InlineKeyboardButton(translated_buttons[2], callback_data="help")],
-        [InlineKeyboardButton(translated_buttons[3], callback_data="settings"),
-         InlineKeyboardButton(translated_buttons[4], callback_data="support")]
-    ])
-
-    # Send the welcome message with the GIF and the keyboard
-    await client.send_animation(
-        chat_id=message.chat.id,
-        animation=LOGO,
-        caption=translated_welcome,
-        reply_markup=keyboard
+@router.message(CommandStart())
+async def start_handler(message: Message):
+    user_mention = message.from_user.mention_html() if message.from_user else "User"
+    text = welcome_text.format(user_mention=user_mention)
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=btn, callback_data=btn.lower().replace(" ", "_"))] for btn in button_list
+        ]
     )
-    await message.reply_text(translated_tip)
+    await message.answer(text, reply_markup=keyboard, disable_web_page_preview=True)
 
-async def start_inline(bot, callback):
-    user_id = callback.from_user.id
-    mention = callback.from_user.mention
-
-    # First safely format the welcome text with mention preservation
-    user_lang = user_db.get_user_language(user_id)
-    translated_welcome = await format_with_mention(welcome_text.replace("{user_mention}", "{mention}"), mention, user_id, user_lang)
-    
-    # Translate button texts
-    translated_buttons = await batch_translate(button_list, user_id)
-
-    # Create the inline keyboard buttons with translated text
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton(translated_buttons[0], url=f"https://t.me/{bot.me.username}?startgroup=true")],
-        [InlineKeyboardButton(translated_buttons[1], callback_data="commands"),
-         InlineKeyboardButton(translated_buttons[2], callback_data="help")],
-        [InlineKeyboardButton(translated_buttons[3], callback_data="settings"),
-         InlineKeyboardButton(translated_buttons[4], callback_data="support")]
-    ])
-
-    # Send the welcome message with the GIF and the keyboard
-    await bot.edit_message_caption(
-        chat_id=callback.message.chat.id,
-        message_id=callback.message.id,
-        caption=translated_welcome,
-        reply_markup=keyboard
-    )
+def register_start_handlers(dp):
+    dp.include_router(router)
 

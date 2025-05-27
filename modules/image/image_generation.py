@@ -9,13 +9,16 @@ from typing import Dict, List, Optional, Tuple, Union
 import re
 import hashlib
 
-from pyrogram.types import InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
-from pyrogram import Client, filters
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery, InputMediaPhoto
+from aiogram import Bot
 from pymongo import MongoClient
 from ImgGenModel.g4f.client import Client as ImageClient
 from ImgGenModel.g4f.Provider import PollinationsAI
 from config import DATABASE_URL, LOG_CHANNEL
 from modules.maintenance import maintenance_check, maintenance_message, is_feature_enabled
+from aiogram import Router
+from aiogram.types import Message
+from aiogram.filters import Command
 
 # Get the logger
 logger = logging.getLogger(__name__)
@@ -271,7 +274,7 @@ async def generate_images(prompt: str, style: str, max_images: int = 1) -> Tuple
 
 # ====== UI COMPONENTS ======
 
-async def update_generation_progress(client: Client, chat_id: int, message_id: int, prompt: str, style: str) -> None:
+async def update_generation_progress(client: Bot, chat_id: int, message_id: int, prompt: str, style: str) -> None:
     """Show a dynamic progress indicator while generating images"""
     progress_stages = [
         "⏳ Analyzing your prompt...",
@@ -304,7 +307,7 @@ async def update_generation_progress(client: Client, chat_id: int, message_id: i
 
 # ====== HANDLERS ======
 
-async def handle_generate_command(client: Client, message: Message) -> None:
+async def handle_generate_command(client: Bot, message: Message) -> None:
     """
     Handle image generation commands
     
@@ -315,7 +318,7 @@ async def handle_generate_command(client: Client, message: Message) -> None:
     # Check maintenance mode and image generation feature
     if await maintenance_check(message.from_user.id) or not await is_feature_enabled("image_generation"):
         maint_msg = await maintenance_message(message.from_user.id)
-        await message.reply(maint_msg)
+        await message.answer(maint_msg)
         return
         
     if not isinstance(message, Message):
@@ -329,7 +332,7 @@ async def handle_generate_command(client: Client, message: Message) -> None:
         if len(message.text.split()) > 1:
             prompt = message.text.split(None, 1)[1]
         else:
-            await message.reply_text(
+            await message.answer(
                 "🖼️ **Image Generation**\n\n"
                 "Please provide a prompt to generate images.\n\n"
                 "Example: `/img a serene mountain landscape`\n\n"
@@ -358,7 +361,7 @@ async def handle_generate_command(client: Client, message: Message) -> None:
                 # Create a fresh state
                 user_states[user_id] = UserGenerationState(user_id, prompt)
             else:
-                await message.reply_text(
+                await message.answer(
                     "⏳ I'm already working on your previous image request. Please wait for it to complete."
                 )
                 return
@@ -368,12 +371,12 @@ async def handle_generate_command(client: Client, message: Message) -> None:
         
     except Exception as e:
         logger.error(f"Error in image generation command handler: {str(e)}")
-        await message.reply_text(f"❌ **Error**\n\nFailed to process image generation request: {str(e)}")
+        await message.answer(f"❌ **Error**\n\nFailed to process image generation request: {str(e)}")
         # Reset user state in case of error
         if user_id in user_states:
             user_states[user_id].set_processing(False)
 
-async def handle_feedback(client: Client, callback_query: CallbackQuery) -> None:
+async def handle_feedback(client: Bot, callback_query: CallbackQuery) -> None:
     """Handle feedback and regeneration callbacks"""
     data = callback_query.data
     user_id = callback_query.from_user.id
@@ -576,7 +579,7 @@ generate_command = handle_generate_command
 handle_image_feedback = handle_feedback
 
 # Change callback data prefixes back to what's expected in run.py
-async def show_style_selection(client: Client, message: Message, prompt: str) -> Message:
+async def show_style_selection(client: Bot, message: Message, prompt: str) -> Message:
     """Show style selection buttons to the user"""
     user_id = message.from_user.id
     
@@ -601,7 +604,7 @@ async def show_style_selection(client: Client, message: Message, prompt: str) ->
     style_markup = InlineKeyboardMarkup(keyboard)
     
     # Send the style selection message
-    style_msg = await message.reply_text(
+    style_msg = await message.answer(
         f"🎭 **Choose Image Style**\n\n"
         f"Your prompt: `{prompt}`\n\n"
         f"Please select a style for your image:",
@@ -614,7 +617,7 @@ async def show_style_selection(client: Client, message: Message, prompt: str) ->
     logger.info(f"Sent style selection for user {user_id} with prompt: '{prompt}'")
     return style_msg
 
-async def process_style_selection(client: Client, callback_query: CallbackQuery) -> None:
+async def process_style_selection(client: Bot, callback_query: CallbackQuery) -> None:
     """Process a style selection callback"""
     try:
         # Extract data from callback
@@ -720,7 +723,7 @@ async def process_style_selection(client: Client, callback_query: CallbackQuery)
         if clicked_user_id in user_states:
             user_states[clicked_user_id].set_processing(False)
 
-async def generate_and_send_images(client: Client, message: Message, prompt: str, style: str, progress_task=None) -> None:
+async def generate_and_send_images(client: Bot, message: Message, prompt: str, style: str, progress_task=None) -> None:
     """Generate images and send them to the user"""
     # Get the user ID from the message
     if hasattr(message, 'from_user') and message.from_user:
@@ -894,6 +897,21 @@ def start_cleanup_scheduler():
             
     # Return the coroutine function so it can be scheduled by the bot
     return run_scheduled_cleanup
+
+router = Router()
+
+@router.message(Command(commands=["img", "generate", "gen"]))
+async def aiogram_img_command_handler(message: Message):
+    """Aiogram 3 handler for /img, /generate, /gen commands"""
+    await handle_generate_command(message.bot, message)
+
+@router.callback_query(lambda c: c.data and c.data.startswith("img_"))
+async def aiogram_img_callback_handler(callback_query: CallbackQuery):
+    """Aiogram 3 callback handler for image style selection, feedback, and regeneration"""
+    await handle_feedback(callback_query.bot, callback_query)
+
+def register_image_generation_handlers(dp: Router):
+    dp.include_router(router)
 
 
 

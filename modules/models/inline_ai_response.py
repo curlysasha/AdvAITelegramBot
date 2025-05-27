@@ -1,23 +1,16 @@
-import asyncio
+from aiogram import Router
+from aiogram.types import InlineQuery, InlineQueryResultArticle, InputTextMessageContent
 import logging
+import asyncio
 import time
 import hashlib
 from typing import Dict, List, Optional, Any
 import re
 
-from pyrogram import Client
-from pyrogram.types import (
-    InlineQuery, 
-    InlineQueryResultArticle,
-    InputTextMessageContent,
-    InlineQueryResultCachedPhoto
-)
-from pyrogram.errors import QueryIdInvalid
-
 from modules.models.ai_res import get_response
 from config import LOG_CHANNEL
 
-# Get the logger
+router = Router()
 logger = logging.getLogger(__name__)
 
 # Store ongoing inline AI generations to prevent duplicates
@@ -286,14 +279,14 @@ async def generate_ai_response(prompt: str) -> str:
         logger.error(f"Error generating inline AI response: {str(e)}")
         return f"Sorry, an error occurred: {str(e)}"
 
-async def handle_inline_ai_query(client: Client, inline_query: InlineQuery, prompt: str) -> None:
+@router.inline_query()
+async def handle_inline_ai_query(inline_query: InlineQuery):
     """Handle inline queries for AI response generation
     
     Args:
-        client: Pyrogram client instance
         inline_query: The inline query object
-        prompt: The processed prompt text (without the ending punctuation)
     """
+    prompt = inline_query.query.strip()
     user_id = inline_query.from_user.id
     query_id = inline_query.id
     username = inline_query.from_user.username or inline_query.from_user.first_name
@@ -314,8 +307,6 @@ async def handle_inline_ai_query(client: Client, inline_query: InlineQuery, prom
                 ],
                 cache_time=1
             )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for short prompt from user {user_id}")
         except Exception as e:
             logger.error(f"Error answering short prompt inline query: {str(e)}")
         return
@@ -337,8 +328,6 @@ async def handle_inline_ai_query(client: Client, inline_query: InlineQuery, prom
                 ],
                 cache_time=1
             )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for cache clear from user {user_id}")
         except Exception as e:
             logger.error(f"Error answering cache clear command: {str(e)}")
         return
@@ -403,8 +392,6 @@ async def handle_inline_ai_query(client: Client, inline_query: InlineQuery, prom
                     ],
                     cache_time=1
                 )
-            except QueryIdInvalid:
-                logger.warning(f"Query ID invalid for ongoing generation message from user {user_id}")
             except Exception as e:
                 logger.error(f"Error answering ongoing generation message: {str(e)}")
             return
@@ -472,16 +459,6 @@ async def handle_inline_ai_query(client: Client, inline_query: InlineQuery, prom
             )
             logger.info(f"Successfully answered inline AI query for user {user_id}")
                     
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for final results from user {user_id}")
-            # Store in temp_query_cache for potential retry with spaces
-            temp_query_cache[user_id] = {
-                "query": prompt,
-                "response": formatted_response,
-                "timestamp": time.time(),
-                "attempts": 0
-            }
-            
         except Exception as e:
             logger.error(f"Error answering with final results: {str(e)}")
             # Store in temp_query_cache for potential retry
@@ -508,8 +485,6 @@ async def handle_inline_ai_query(client: Client, inline_query: InlineQuery, prom
                 ],
                 cache_time=5
             )
-        except QueryIdInvalid:
-            logger.warning(f"Query ID invalid for error message from user {user_id}")
         except Exception as e2:
             logger.error(f"Error answering with error message: {str(e2)}")
     finally:
@@ -577,3 +552,6 @@ async def cleanup_ongoing_generations():
             logger.error(f"Error in AI cleanup task: {str(e)}")
             
         await asyncio.sleep(5)  # Run every 5 seconds for more responsive cleanup
+
+def register_inline_ai_handlers(dp: Router):
+    dp.include_router(router)

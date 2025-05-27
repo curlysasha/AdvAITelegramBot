@@ -1,13 +1,8 @@
-import pyrogram
-from pyrogram import filters
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.types import Message
-from pyrogram.types import InlineQuery
-from pyrogram.types import CallbackQuery
+from aiogram import Router
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
 from modules.lang import async_translate_to_lang, translate_ui_element, batch_translate, format_with_mention
 from modules.chatlogs import channel_log
 from config import DATABASE_URL
-
 from pymongo import MongoClient
 
 # Replace with your MongoDB connection string
@@ -55,7 +50,11 @@ You can change your settings from below options.
 **@AdvChatGptBot**
 """
 
-async def settings_inline(client, callback):
+router = Router()
+
+# Handler for opening settings menu
+@router.callback_query(lambda c: c.data == "settings")
+async def settings_inline(callback: CallbackQuery):
     user_id = callback.from_user.id
     user_lang_doc = user_lang_collection.find_one({"user_id": user_id})
     if user_lang_doc:
@@ -117,7 +116,7 @@ async def settings_inline(client, callback):
         ]
     )
 
-    await callback.message.edit(
+    await callback.message.edit_text(
         text=formatted_text,
         reply_markup=keyboard,
         disable_web_page_preview=True
@@ -125,7 +124,9 @@ async def settings_inline(client, callback):
 
 
 
-async def settings_language_callback(client, callback):
+# Handler for language settings
+@router.callback_query(lambda c: c.data == "settings_lans")
+async def settings_language_callback(callback: CallbackQuery):
     user_id = callback.from_user.id
     
     # Fetch user voice settings from MongoDB
@@ -169,7 +170,7 @@ async def settings_language_callback(client, callback):
         ]
     )
 
-    await callback.message.edit(
+    await callback.message.edit_text(
         text=message_text,
         reply_markup=keyboard,
         disable_web_page_preview=True
@@ -177,7 +178,9 @@ async def settings_language_callback(client, callback):
 
 
 
-async def change_voice_setting(client, callback):
+# Handler for changing voice setting
+@router.callback_query(lambda c: c.data in ["settings_voice", "settings_text"])
+async def change_voice_setting(callback: CallbackQuery):
     user_id = callback.from_user.id
     
     # Determine the new voice setting based on the callback data
@@ -220,14 +223,16 @@ async def change_voice_setting(client, callback):
     )
 
     # Edit the message to reflect the new settings
-    await callback.message.edit(
+    await callback.message.edit_text(
         text=message_text,
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
 
-# Function to handle settings inline
-async def settings_voice_inlines(client, callback):
+
+# Handler for voice settings menu
+@router.callback_query(lambda c: c.data == "settings_v")
+async def settings_voice_inlines(callback: CallbackQuery):
     settings_text = """
 **Setting Menu for User {mention}**
 
@@ -303,11 +308,16 @@ You can change your settings from below options.
         ]
     )
 
-    await callback.message.edit(
+    await callback.message.edit_text(
         text=formatted_text,
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
+
+
+# Registration function for main bot
+def register_settings_handlers(dp: Router):
+    dp.include_router(router)
 
 
 
