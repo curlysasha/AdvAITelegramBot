@@ -17,7 +17,7 @@ user_voice_setting_collection = db_service.get_collection('user_voice_setting')
 history_collection = db_service.get_collection('history')
 
 # Enhanced audio processing to support multiple formats and languages
-async def process_audio_file(input_path, output_path=None, language="en-US"):
+async def process_audio_file(input_path, output_path=None, language="ru-RU"):
     """Process audio file to extract text with enhanced language support"""
     try:
         if not output_path:

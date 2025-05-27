@@ -8,7 +8,7 @@ from config import LOG_CHANNEL
 from modules.chatlogs import user_log
 
 
-async def handle_text_message(client, message, text, language='en', voice_speed=False):    
+async def handle_text_message(client, message, text, language='ru', voice_speed=False):    
     """
     Convert text to voice with enhanced quality and language support
     

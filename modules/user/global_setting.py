@@ -54,7 +54,7 @@ You can change your settings from @AdvChatGptBot's settings menu.
     if user_lang_doc:
         current_language = user_lang_doc['language']
     else:
-        current_language = "en"
+        current_language = "ru"
         user_lang_collection.insert_one({"user_id": user_id, "language": current_language})
     
     current_language_label = languages[current_language]

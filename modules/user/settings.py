@@ -61,7 +61,7 @@ async def settings_inline(client, callback):
     if user_lang_doc:
         current_language = user_lang_doc['language']
     else:
-        current_language = "en"
+        current_language = "ru"
         user_lang_collection.insert_one({"user_id": user_id, "language": current_language})
     
     user_settings = user_voice_collection.find_one({"user_id": user_id})

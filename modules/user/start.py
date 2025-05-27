@@ -18,26 +18,26 @@ button_list = [
 ]
 
 welcome_text = """
-✨ **Welcome {user_mention}!** ✨
+✨ **Добро пожаловать, {user_mention}!** ✨
 
-🤖 **Advanced AI Bot **
+🤖 **Продвинутый ИИ-бот**
 
-I can help you with:
+Я могу помочь вам с:
 
-🧠 **Smart Chat** - Intelligent conversations with GPT-4o
-🗣️ **Voice & Text** - Convert voice to text and back
-🖼️ **Image Creation** - Generate stunning visuals from text
-📝 **Text Extraction** - Analyze text from any image
-🌐 **Multilingual** - Communicate in your language
+🧠 **Умный чат** — Интеллектуальные беседы с GPT-4o  
+🗣️ **Голос и текст** — Преобразование голоса в текст и обратно  
+🖼️ **Создание изображений** — Генерация впечатляющих визуалов из текста  
+📝 **Извлечение текста** — Анализ текста из любого изображения  
+🌐 **Многоязычность** — Общение на вашем языке
 
 ━━━━━━━━━━━━━━━━━━━━━
 
-👨‍💻 **Developed by [Chandan Singh](https://techycsr.me)**(**@techycsr**)
+👨‍💻 👨‍💻 **Вайбкодинг by [%NeuroTemp%](https://t.me/neurotemporary)**
 
-**Select a button below to get started!**
+****
 """
 
-tip_text = "💡 **Pro Tip:** Type any message to start chatting with me,OR\nuse /img with your prompt to generate images!\n**For more commands use /help.**"
+tip_text = "💡 **Совет:** Введите любое сообщение, чтобы начать чат со мной, ИЛИ используй /img с промтом для генерации изображений!\n**Для получения списка команд используй /help.**"
 
 LOGO = "https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExdnp4MnR0YXk3ZGNjenR6NGRoaDNkc2h2NDgxa285NnExaGM1MTZmYyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/S60CrN9iMxFlyp7uM8/giphy.gif"
 
@@ -82,7 +82,7 @@ async def start_inline(bot, callback):
     mention = callback.from_user.mention
 
     # First safely format the welcome text with mention preservation
-    user_lang = user_db.get_user_language(user_id)
+    user_db.get_user_language(user_id)
     translated_welcome = await format_with_mention(welcome_text.replace("{user_mention}", "{mention}"), mention, user_id, user_lang)
     
     # Translate button texts
