@@ -13,8 +13,8 @@ button_list = [
     "➕ Добавить в группу",
     "🛠️ Команды",
     "❓ Помощь",
-    "⚙️ Настройки",
-    "📞 Поддержка"
+    "⚙️ Настройки"
+    # "📞 Поддержка"  # Временно убрана из меню
 ]
 
 welcome_text = """
@@ -64,8 +64,8 @@ async def start(client, message):
         [InlineKeyboardButton(translated_buttons[0], url=f"https://t.me/{client.me.username}?startgroup=true")],
         [InlineKeyboardButton(translated_buttons[1], callback_data="commands"),
          InlineKeyboardButton(translated_buttons[2], callback_data="help")],
-        [InlineKeyboardButton(translated_buttons[3], callback_data="settings"),
-         InlineKeyboardButton(translated_buttons[4], callback_data="support")]
+        [InlineKeyboardButton(translated_buttons[3], callback_data="settings")]
+        # Кнопка поддержки убрана
     ])
 
     # Send the welcome message with the GIF and the keyboard
@@ -87,8 +87,8 @@ async def start_inline(bot, callback):
         [InlineKeyboardButton(translated_buttons[0], url=f"https://t.me/{bot.me.username}?startgroup=true")],
         [InlineKeyboardButton(translated_buttons[1], callback_data="commands"),
          InlineKeyboardButton(translated_buttons[2], callback_data="help")],
-        [InlineKeyboardButton(translated_buttons[3], callback_data="settings"),
-         InlineKeyboardButton(translated_buttons[4], callback_data="support")]
+        [InlineKeyboardButton(translated_buttons[3], callback_data="settings")]
+        # Кнопка поддержки убрана
     ])
     await bot.edit_message_caption(
         chat_id=callback.message.chat.id,

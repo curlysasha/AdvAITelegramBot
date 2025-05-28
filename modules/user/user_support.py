@@ -39,7 +39,7 @@ async def settings_support_callback(client, callback_query):
         [InlineKeyboardButton(community_btn, url="https://t.me/AdvChatGpt"),
          InlineKeyboardButton(source_code_btn, url="https://github.com/TechyCSR/AdvAITelegramBot")],
         [InlineKeyboardButton(system_status_btn, callback_data="settings_others")],
-        [InlineKeyboardButton(back_btn, callback_data="back_to_help")]
+         [InlineKeyboardButton(back_btn, callback_data="back_to_help")],  # Кнопка поддержки временно убрана
     ])
     await callback_query.message.edit(
         text="<b>Поддержка и информация</b>\n\nЗдесь вы можете получить помощь, узнать о разработчиках и статусе системы.",
