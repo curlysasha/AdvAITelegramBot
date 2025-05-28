@@ -9,146 +9,146 @@ from modules.chatlogs import channel_log
 
 
 help_text = """
-✨ **ADVANCED AI BOT - HELP CENTER** ✨
+✨ **PocketChatGPT - ЦЕНТР ПОМОЩИ** ✨
 
 ━━━━━━━━━━━━━━━━━━━
 
-This intelligent bot was created by **Chandan Singh** (@techycsr) 
-to bring powerful AI features directly to your Telegram chats.
+Этот интеллектуальный бот создан
+чтобы принести мощные AI-функции прямо в ваши чаты Telegram.
 
-**SELECT A CATEGORY BELOW:**
+**ВЫБЕРИТЕ КАТЕГОРИЮ НИЖЕ:**
 """
 
 ai_chat_help = """
-🧠 **AI CHAT ASSISTANT** 🧠
+🧠 **AI ЧАТ-АССИСТЕНТ** 🧠
 
 ━━━━━━━━━━━━━━━━━━━
 
-The bot uses **GPT-4o** to provide intelligent responses to any question.
+Бот использует **GPT-4o** для предоставления умных ответов на любые вопросы.
 
-**KEY FEATURES:**
-• 💬 **Context-aware** - Remembers conversation history
-• 🧩 **Complex questions** - Detailed, thoughtful answers
-• 💻 **Code generation** - With syntax highlighting
-• 🔢 **Math solver** - Works with equations & problems
-• 🌎 **Translation** - Works in multiple languages
+**ОСНОВНЫЕ ВОЗМОЖНОСТИ:**
+• 💬 **Контекст** — Помнит историю переписки
+• 🧩 **Сложные вопросы** — Подробные, продуманные ответы
+• 💻 **Генерация кода** — С подсветкой синтаксиса
+• 🔢 **Математика** — Решает уравнения и задачи
+• 🌎 **Перевод** — Работает на разных языках
 
-**COMMANDS:**
-• 💬 In private chats: Just type your message
-• 🔄 In groups: Use `/ai`, `/ask`, or `/say` + question
-• 🆕 Reset chat: Use `/new` or `/newchat`
+**КОМАНДЫ:**
+• 💬 В личных чатах: Просто напишите сообщение
+• 🔄 В группах: Используйте `/ai`, `/ask` или `/say` + вопрос
+• 🆕 Сбросить чат: `/new` или `/newchat`
 
-**EXAMPLE:** 
-`/ai What makes quantum computing different from classical computing?`
+**ПРИМЕР:**
+`/ai Чем квантовые вычисления отличаются от классических?`
 
-**💡 PRO TIP:** For code questions, mention the programming language for better formatting.
+**💡 СОВЕТ:** Для вопросов по коду указывайте язык программирования для лучшего форматирования.
 """
 
 image_gen_help = """
-🖼️ **IMAGE GENERATION** 🖼️
+🖼️ **ГЕНЕРАЦИЯ ИЗОБРАЖЕНИЙ** 🖼️
 
 ━━━━━━━━━━━━━━━━━━━
 
-Create stunning images from text descriptions using advanced AI.
+Создавайте потрясающие изображения по текстовому описанию с помощью ИИ.
 
-**KEY FEATURES:**
-• 🎨 **High-quality images** - Detailed & realistic
-• 🏞️ **Multiple styles** - Realistic, Artistic, Sketch, 3D
-• 🔄 **Regeneration** - One-click retry with same prompt
-• 👥 **Works everywhere** - Private chats & groups
+**ОСНОВНЫЕ ВОЗМОЖНОСТИ:**
+• 🎨 **Качественные изображения** — Детализированные и реалистичные
+• 🏞️ **Множество стилей** — Реализм, Арт, Эскиз, 3D
+• 🔄 **Регенерация** — Повтор с тем же запросом в один клик
+• 👥 **Работает везде** — В личных и групповых чатах
 
-**COMMANDS:**
-• 📝 `/generate [prompt]` - Full command
-• 📸 `/img [prompt]` - Shorter alternative
-• 🖌️ `/gen [prompt]` - Shortest version
+**КОМАНДЫ:**
+• 📝 `/generate [запрос]` — Полная команда
+• 📸 `/img [запрос]` — Короткая альтернатива
+• 🖌️ `/gen [запрос]` — Самая короткая версия
 
-**EXAMPLE:**
-`/img a cyberpunk city at night with neon lights and flying cars`
+**ПРИМЕР:**
+`/img киберпанк-город ночью с неоновыми огнями и летающими машинами`
 
-**💡 PRO TIPS:**
-• Be specific about details, lighting, and perspective
-• Include artistic references for better results
-• Try different styles for varied outputs
+**💡 СОВЕТЫ:**
+• Уточняйте детали, освещение и ракурс
+• Добавляйте художественные референсы для лучшего результата
+• Пробуйте разные стили для разнообразия
 """
 
 voice_features_help = """
-🎙️ **VOICE FEATURES** 🎙️
+🎙️ **ГОЛОСОВЫЕ ФУНКЦИИ** 🎙️
 
 ━━━━━━━━━━━━━━━━━━━
 
-Convert between voice and text with advanced speech processing.
+Преобразуйте голос в текст и обратно с помощью ИИ.
 
-**KEY FEATURES:**
-• 🗣️ **Voice-to-text** - Transcribe voice messages
-• 🔊 **Text-to-voice** - Listen to bot responses
-• 🌐 **Multilingual** - Works in multiple languages
-• 💬 **Conversation** - Ask questions by voice
+**ОСНОВНЫЕ ВОЗМОЖНОСТИ:**
+• 🗣️ **Голос в текст** — Распознаёт голосовые сообщения
+• 🔊 **Текст в голос** — Озвучивает ответы бота
+• 🌐 **Мультиязычность** — Работает на разных языках
+• 💬 **Диалог** — Можно задавать вопросы голосом
 
-**HOW TO USE:**
-1. 🎤 Send a voice message
-2. 📝 Bot converts to text & understands
-3. 💬 Bot responds to your question
-4. ⚙️ Adjust voice settings in Settings menu
+**КАК ИСПОЛЬЗОВАТЬ:**
+1. 🎤 Отправьте голосовое сообщение
+2. 📝 Бот преобразует в текст и поймёт
+3. 💬 Бот ответит на ваш вопрос
+4. ⚙️ Настройте голосовые параметры в меню настроек
 
-**💡 PRO TIPS:**
-• Speak clearly in a quiet environment
-• Keep messages under 1 minute for best results
-• Set your preferred voice language in settings
+**💡 СОВЕТЫ:**
+• Говорите чётко в тихой обстановке
+• Сообщения до 1 минуты — лучший результат
+• Установите предпочитаемый язык голоса в настройках
 """
 
 image_analysis_help = """
-🔍 **IMAGE ANALYSIS** 🔍
+🔍 **АНАЛИЗ ИЗОБРАЖЕНИЙ** 🔍
 
 ━━━━━━━━━━━━━━━━━━━
 
-Extract and analyze text from any image with smart OCR technology.
+Извлекайте и анализируйте текст с изображений с помощью OCR.
 
-**KEY FEATURES:**
-• 📱 **Text extraction** - From photos & screenshots
-• 📄 **Document scanning** - Read printed documents
-• ❓ **Follow-up questions** - Ask about extracted text
-• 📊 **Data recognition** - Tables, receipts & more
+**ОСНОВНЫЕ ВОЗМОЖНОСТИ:**
+• 📱 **Извлечение текста** — С фото и скриншотов
+• 📄 **Сканирование документов** — Чтение печатных документов
+• ❓ **Вопросы по тексту** — Задавайте вопросы по извлечённому тексту
+• 📊 **Распознавание данных** — Таблицы, чеки и др.
 
-**HOW TO USE:**
-1. 📷 Send any image with text
-2. 🔍 Bot extracts all readable text
-3. 💬 Ask follow-up questions about the content
-4. 📱 In groups, add "ai" in image caption
+**КАК ИСПОЛЬЗОВАТЬ:**
+1. 📷 Отправьте изображение с текстом
+2. 🔍 Бот извлечёт весь читаемый текст
+3. 💬 Задайте вопросы по содержимому
+4. 📱 В группах добавьте "ai" в подпись к фото
 
-**💡 PRO TIPS:**
-• Use good lighting for clearer results
-• Capture text straight-on, not at angles
-• Crop to focus on the important text
+**💡 СОВЕТЫ:**
+• Используйте хорошее освещение
+• Фотографируйте текст прямо, не под углом
+• Обрезайте фото, чтобы оставить только нужный текст
 """
 
 quick_start_help = """
-🚀 **QUICK START GUIDE** 🚀
+🚀 **БЫСТРЫЙ СТАРТ** 🚀
 
 ━━━━━━━━━━━━━━━━━━━
 
-**GET STARTED IN 3 STEPS:**
+**НАЧНИТЕ ЗА 3 ШАГА:**
 
-1️⃣ **Chat with AI**
-   • Private: Just type any message
-   • Groups: Use `/ai` command
+1️⃣ **Общайтесь с ИИ**
+   • В личке: Просто напишите сообщение
+   • В группе: Используйте команду `/ai`
 
-2️⃣ **Generate Images**
-   • Use `/img` followed by description
-   • Example: `/img sunset over mountains`
+2️⃣ **Генерируйте изображения**
+   • Используйте `/img` и описание
+   • Пример: `/img закат над горами`
 
-3️⃣ **Analyze Images**
-   • Send any image with text
-   • Bot will extract and analyze
+3️⃣ **Анализируйте изображения**
+   • Отправьте изображение с текстом
+   • Бот извлечёт и проанализирует текст
 
-**USEFUL COMMANDS:**
-• `/start` - Main menu
-• `/help` - This help center
-• `/settings` - Configure bot preferences
-• `/new` - Clear conversation history
+**ПОЛЕЗНЫЕ КОМАНДЫ:**
+• `/start` — Главное меню
+• `/help` — Центр помощи
+• `/settings` — Настройки бота
+• `/new` — Очистить историю чата
 
-**HAVING TROUBLE?**
-• Select the Support button from main menu
-• Try more specific prompts for better results
+**ВОЗНИКЛИ ПРОБЛЕМЫ?**
+• Выберите кнопку поддержки в главном меню
+• Пробуйте более конкретные запросы для лучшего результата
 """
 
 
@@ -277,4 +277,4 @@ async def handle_help_category(client, callback):
     
     await callback.answer()
     return
-    
+
