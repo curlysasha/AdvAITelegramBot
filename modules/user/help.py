@@ -245,7 +245,7 @@ async def handle_help_category(client, callback):
     
     # Translate the selected help content
     translated_text = await async_translate_to_lang(help_content, user_id)
-    back_btn = await translate_ui_element("🔙 Back to Help Menu", user_id)
+    back_btn = "🔙 Назад"
     
     # Use "help" as callback_data to return to main help menu
     keyboard = InlineKeyboardMarkup([
