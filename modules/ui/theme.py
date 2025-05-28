@@ -77,17 +77,17 @@ class Theme:
     @staticmethod
     def back_button(callback_data: str = "back") -> InlineKeyboardButton:
         """Standard back navigation button"""
-        return InlineKeyboardButton(f"{Colors.BACK} Back", callback_data=callback_data)
+        return InlineKeyboardButton(f"{Colors.BACK} Назад", callback_data=callback_data)
     
     @staticmethod
     def settings_button(callback_data: str = "settings") -> InlineKeyboardButton:
         """Standard settings button"""
-        return InlineKeyboardButton(f"{Colors.SETTINGS} Settings", callback_data=callback_data)
+        return InlineKeyboardButton(f"{Colors.SETTINGS} Настройки", callback_data=callback_data)
     
     @staticmethod
     def help_button(callback_data: str = "help") -> InlineKeyboardButton:
         """Standard help button"""
-        return InlineKeyboardButton(f"{Colors.HELP} Help", callback_data=callback_data)
+        return InlineKeyboardButton(f"{Colors.HELP} Помощь", callback_data=callback_data)
     
     @staticmethod
     def link_button(text: str, url: str) -> InlineKeyboardButton:
@@ -194,8 +194,8 @@ class CommonButtons:
     def yes_no_buttons(yes_callback: str, no_callback: str) -> List[InlineKeyboardButton]:
         """Standard Yes/No button pair"""
         return [
-            InlineKeyboardButton(f"{Colors.SUCCESS} Yes", callback_data=yes_callback),
-            InlineKeyboardButton(f"{Colors.DANGER} No", callback_data=no_callback)
+            InlineKeyboardButton(f"{Colors.SUCCESS} Да", callback_data=yes_callback),
+            InlineKeyboardButton(f"{Colors.DANGER} Нет", callback_data=no_callback)
         ]
     
     @staticmethod
@@ -203,28 +203,25 @@ class CommonButtons:
         """Standard feedback buttons (like/dislike + regenerate)"""
         return [
             [
-                InlineKeyboardButton(f"{Colors.HEART} Love it", 
-                                    callback_data=f"img_feedback_positive_{user_id}_{item_id}"),
-                InlineKeyboardButton(f"{Colors.DANGER} Not good", 
-                                    callback_data=f"img_feedback_negative_{user_id}_{item_id}")
+                InlineKeyboardButton(f"{Colors.HEART} Нравится", callback_data=f"img_feedback_positive_{user_id}_{item_id}"),
+                InlineKeyboardButton(f"{Colors.DANGER} Не нравится", callback_data=f"img_feedback_negative_{user_id}_{item_id}")
             ],
-            [InlineKeyboardButton(f"{Colors.NEW} Regenerate", 
-                                 callback_data=f"img_regenerate_{user_id}_{item_id}")]
+            [InlineKeyboardButton(f"{Colors.NEW} Сгенерировать ещё", callback_data=f"img_regenerate_{user_id}_{item_id}")]
         ]
     
     @staticmethod
     def main_menu_buttons(bot_username: str) -> List[List[InlineKeyboardButton]]:
         """Standard main menu buttons"""
         return [
-            [InlineKeyboardButton(f"{Colors.GROUP} Add to Group", 
+            [InlineKeyboardButton(f"{Colors.GROUP} Добавить в группу", 
                                  url=f"https://t.me/{bot_username}?startgroup=true")],
             [
-                InlineKeyboardButton(f"{Colors.COMMAND} Commands", callback_data="commands"),
-                InlineKeyboardButton(f"{Colors.HELP} Help", callback_data="help")
+                InlineKeyboardButton(f"{Colors.COMMAND} Команды", callback_data="commands"),
+                InlineKeyboardButton(f"{Colors.HELP} Помощь", callback_data="help")
             ],
             [
-                InlineKeyboardButton(f"{Colors.SETTINGS} Settings", callback_data="settings"),
-                InlineKeyboardButton(f"{Colors.SUPPORT} Support", callback_data="support")
+                InlineKeyboardButton(f"{Colors.SETTINGS} Настройки", callback_data="settings"),
+                InlineKeyboardButton(f"{Colors.SUPPORT} Поддержка", callback_data="support")
             ]
         ]
     
@@ -232,10 +229,10 @@ class CommonButtons:
     def admin_menu_buttons() -> List[List[InlineKeyboardButton]]:
         """Standard admin menu buttons"""
         return [
-            [InlineKeyboardButton(f"{Colors.ADMIN} Admin Panel", callback_data="admin_panel")],
+            [InlineKeyboardButton(f"{Colors.ADMIN} Админ-панель", callback_data="admin_panel")],
             [
-                InlineKeyboardButton(f"{Colors.STATS} Statistics", callback_data="admin_stats"),
-                InlineKeyboardButton(f"{Colors.USER} User Manager", callback_data="admin_users")
+                InlineKeyboardButton(f"{Colors.STATS} Статистика", callback_data="admin_stats"),
+                InlineKeyboardButton(f"{Colors.USER} Пользователи", callback_data="admin_users")
             ],
             [Theme.back_button()]
-        ] 
+        ]

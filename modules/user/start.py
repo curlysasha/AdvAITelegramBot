@@ -10,11 +10,11 @@ import database.user_db as user_db
 
 # Define button texts with emojis
 button_list = [
-    "➕ Add to Group",
-    "🛠️ Commands",
-    "❓ Help",
-    "⚙️ Settings",
-    "📞 Support"
+    "➕ Добавить в группу",
+    "🛠️ Команды",
+    "❓ Помощь",
+    "⚙️ Настройки",
+    "📞 Поддержка"
 ]
 
 welcome_text = """
@@ -55,9 +55,9 @@ async def start(client, message):
     translated_welcome = await format_with_mention(welcome_text.replace("{user_mention}", "{mention}"), mention, user_id, user_lang)
     
     # Translate other texts
-    translated_texts = await batch_translate([tip_text] + button_list, user_id)
+    translated_texts = await batch_translate([tip_text], user_id)
     translated_tip = translated_texts[0]
-    translated_buttons = translated_texts[1:]
+    translated_buttons = button_list  # Всегда использовать русский вариант
 
     # Create the inline keyboard buttons with translated text
     keyboard = InlineKeyboardMarkup([
@@ -82,7 +82,7 @@ async def start_inline(bot, callback):
     mention = callback.from_user.mention
     user_lang = user_db.get_user_language(user_id)
     translated_welcome = await format_with_mention(welcome_text.replace("{user_mention}", "{mention}"), mention, user_id, user_lang)
-    translated_buttons = await batch_translate(button_list, user_id)
+    translated_buttons = button_list  # Всегда использовать русский вариант
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(translated_buttons[0], url=f"https://t.me/{bot.me.username}?startgroup=true")],
         [InlineKeyboardButton(translated_buttons[1], callback_data="commands"),
