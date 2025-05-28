@@ -15,3 +15,5 @@ logs/
 .DS_Store
 .env
 .env.*
+# Railway: Add MongoDB as a dependency for deployment autodetection
+# railway:mongodb
