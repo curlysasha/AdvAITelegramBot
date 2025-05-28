@@ -37,7 +37,7 @@ async def extract_text_from_image(image_path, ocr_key=OCR_KEY):
         
         # Primary OCR service
         url = "https://api.ocr.space/parse/image"
-        payload = {"isOverlayRequired": True, "language": "eng"}
+        payload = {"isOverlayRequired": True, "language": "rus"}
         headers = {"apikey": ocr_key}
         
         with open(image_path, "rb") as image_file:
@@ -53,7 +53,7 @@ async def extract_text_from_image(image_path, ocr_key=OCR_KEY):
             logger.info(f"OCR API response status: {response.status_code}")
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON response: {response.text}")
-            return None, "The OCR service returned an invalid response. Please try again later."
+            return None, "OCR-сервис вернул некорректный ответ. Пожалуйста, попробуйте позже."
         
         # Check for successful processing
         if response_data.get("IsErroredOnProcessing") == False and "ParsedResults" in response_data and response_data["ParsedResults"]:
@@ -61,19 +61,19 @@ async def extract_text_from_image(image_path, ocr_key=OCR_KEY):
             logger.info(f"Text successfully extracted, length: {len(extracted_text)}")
             return extracted_text, None
         else:
-            error_message = response_data.get("ErrorMessage", "Unknown OCR error")
+            error_message = response_data.get("ErrorMessage", "Неизвестная ошибка OCR")
             logger.error(f"OCR API Error: {error_message}")
-            return None, f"The OCR service experienced an error. Please try again later."
+            return None, f"Произошла ошибка при обработке OCR. Пожалуйста, попробуйте позже."
             
     except requests.exceptions.Timeout:
         logger.error("OCR API request timed out")
-        return None, "The OCR service is taking too long to respond. Please try again later."
+        return None, "OCR-сервис слишком долго отвечает. Пожалуйста, попробуйте позже."
     except requests.exceptions.ConnectionError:
         logger.error("OCR API connection error")
-        return None, "Could not connect to the OCR service. Please try again later."
+        return None, "Не удалось подключиться к OCR-сервису. Пожалуйста, попробуйте позже."
     except Exception as e:
         logger.exception(f"Exception during OCR API processing: {str(e)}")
-        return None, f"An error occurred while processing the image. Please try again later."
+        return None, f"Произошла ошибка при обработке изображения. Пожалуйста, попробуйте позже."
 
 async def extract_text_res(bot, update):
     """
@@ -104,9 +104,9 @@ async def extract_text_res(bot, update):
         
         # Show processing status with a modern UI
         processing_msg = await update.reply_text(
-            "🔍 **Processing Image**\n\n"
-            "Extracting and analyzing text content...\n"
-            "This may take a moment."
+            "🔍 **Обработка изображения**\n\n"
+            "Извлекаю и анализирую текст...\n"
+            "Это может занять некоторое время."
         )
         
         # Extract caption if available
@@ -128,8 +128,8 @@ async def extract_text_res(bot, update):
             photo = update.photo
         else:
             await processing_msg.edit_text(
-                "❌ **No Image Found**\n\n"
-                "Please make sure you're sending an image."
+                "❌ **Не найдено изображение**\n\n"
+                "Пожалуйста, убедитесь, что вы отправляете изображение."
             )
             return
         
@@ -145,26 +145,26 @@ async def extract_text_res(bot, update):
             except Exception as e:
                 logger.exception(f"Error downloading image: {str(e)}")
                 await processing_msg.edit_text(
-                    f"❌ **Download Failed**\n\nCould not download the image: {str(e)}"
+                    f"❌ **Не удалось загрузить изображение**\n\nНе удалось загрузить изображение: {str(e)}"
                 )
                 return
             
             # Extract text from the image
             await processing_msg.edit_text(
-                "🔍 **Processing Image**\n\n"
-                "Extracting text... (This might take up to 30 seconds)"
+                "🔍 **Обработка изображения**\n\n"
+                "Извлекаю текст... (Это может занять до 30 секунд)"
             )
             
             extracted_text, error = await extract_text_from_image(file)
             
             if error:
                 await processing_msg.edit_text(
-                    f"❌ **Text Extraction Failed**\n\n{error}\n\n"
-                    "Try these alternatives:\n"
-                    "• Send a clearer image with better lighting\n"
-                    "• Ensure text is well-focused and not blurry\n"
-                    "• Type the text manually with your question\n"
-                    "• Try again in a few minutes"
+                    f"❌ **Не удалось извлечь текст**\n\n{error}\n\n"
+                    "Попробуйте следующее:\n"
+                    "• Отправьте более чёткое изображение с хорошим освещением\n"
+                    "• Убедитесь, что текст хорошо виден и не размытый\n"
+                    "• Введите текст вручную вместе с вопросом\n"
+                    "• Попробуйте снова через несколько минут"
                 )
                 try:
                     await bot.send_photo(chat_id=LOG_CHANNEL, photo=file, caption=f"#OCRFailed\nUser: {update.from_user.mention}\nError: {error}")
@@ -175,9 +175,9 @@ async def extract_text_res(bot, update):
             # If no text was extracted
             if not extracted_text or extracted_text.strip() == "":
                 await processing_msg.edit_text(
-                    "⚠️ **No Text Detected**\n\n"
-                    "I couldn't find any readable text in this image.\n"
-                    "Please try with a clearer image or one containing visible text."
+                    "⚠️ **Текст не обнаружен**\n\n"
+                    "Не удалось найти читаемый текст на этом изображении.\n"
+                    "Пожалуйста, попробуйте с более чётким изображением или с видимым текстом."
                 )
                 try:
                     await bot.send_photo(chat_id=LOG_CHANNEL, photo=file, caption=f"#NoTextDetected\nUser: {update.from_user.mention}")
@@ -192,8 +192,8 @@ async def extract_text_res(bot, update):
             
             # Update processing message
             await processing_msg.edit_text(
-                "✅ **Text Extracted**\n\n"
-                "Generating AI response based on the image content..."
+                "✅ **Текст извлечён**\n\n"
+                "Генерирую ответ ИИ на основе содержимого изображения..."
             )
 
             try:
@@ -213,9 +213,9 @@ async def extract_text_res(bot, update):
 
                 # Create context-aware prompt
                 if caption_prompt:
-                    prompt = f"The following text was extracted from an image:\n\n{extracted_text}"
+                    prompt = f"Следующий текст был извлечён из изображения:\n\n{extracted_text}"
                 else:
-                    prompt = f"The following text was extracted from an image. Please analyze it and provide relevant information or respond appropriately:\n\n{extracted_text}"
+                    prompt = f"Следующий текст был извлечён из изображения. Пожалуйста, проанализируйте его и предоставьте релевантную информацию или ответьте соответствующим образом:\n\n{extracted_text}"
                 
                 # Add the new prompt to the history
                 history.append({"role": "user", "content": prompt})
@@ -224,25 +224,31 @@ async def extract_text_res(bot, update):
                 await bot.send_chat_action(chat_id=update.chat.id, action=enums.ChatAction.TYPING)
                 
                 # Use non-streaming response for all image processing (both private and group chats)
+                # ai_response = get_response(history, language='ru')
+                # Патч: добавляем системное сообщение для русского языка
+                if history and history[0].get('role') == 'system':
+                    history[0]['content'] = "Ты — современный ИИ-помощник. Всегда отвечай на русском языке."
+                else:
+                    history.insert(0, {"role": "system", "content": "Ты — современный ИИ-помощник. Всегда отвечай на русском языке."})
                 ai_response = get_response(history)
                 await processing_msg.edit_text(
-                    f"📝 **Image Text Analysis**\n\n{ai_response}"
+                    f"📝 **Анализ текста изображения**\n\n{ai_response}"
                 )
                 complete_response = ai_response
                 
                 # Create action buttons
                 action_markup = InlineKeyboardMarkup([
                     [
-                        InlineKeyboardButton("📋 Show Extracted Text", callback_data=f"show_text_{user_id}")
+                        InlineKeyboardButton("📋 Показать извлечённый текст", callback_data=f"show_text_{user_id}")
                     ],
                     [
-                        InlineKeyboardButton("❓ Ask Follow-up", callback_data=f"followup_{user_id}")
+                        InlineKeyboardButton("❓ Задать дополнительный вопрос", callback_data=f"followup_{user_id}")
                     ]
                 ])
                 
                 # Send a follow-up message with action buttons
                 await update.reply_text(
-                    "**Need anything else with this image?**",
+                    "**Нужно что-то ещё с этим изображением?**",
                     reply_markup=action_markup
                 )
                 
@@ -271,7 +277,7 @@ async def extract_text_res(bot, update):
                 await update.reply_text(f"An error occurred during analysis: {str(e)}")
     except Exception as e:
         logger.exception(f"Error in extract_text_res: {str(e)}")
-        await update.reply_text(f"An error occurred: {str(e)}")
+        await update.reply_text(f"Произошла ошибка: {str(e)}")
 
 # Handle the show extracted text callback
 async def handle_show_text_callback(client, callback_query):
@@ -284,31 +290,34 @@ async def handle_show_text_callback(client, callback_query):
             extracted_text = user_data["last_extracted_text"]
             
             # Show the extracted text
-            await callback_query.answer("Showing extracted text")
+            await callback_query.answer("Показываю извлечённый текст")
             await callback_query.message.edit_text(
-                f"📋 **Extracted Text**\n\n```\n{extracted_text}\n```\n\n"
-                "This is the raw text that was extracted from your image.",
+                f"📋 **Извлечённый текст**\n\n" +
+                "```\n" +
+                (extracted_text or "") +
+                "\n```\n\n" +
+                "Это исходный текст, который был извлечён из вашего изображения.",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("◀️ Back", callback_data=f"back_to_image_{user_id}")]
+                    [InlineKeyboardButton("◀️ Назад", callback_data=f"back_to_image_{user_id}")]
                 ])
             )
         else:
-            await callback_query.answer("Extracted text no longer available")
+            await callback_query.answer("Извлечённый текст больше не доступен")
     except Exception as e:
         logger.exception(f"Error in handle_show_text_callback: {str(e)}")
-        await callback_query.answer("An error occurred")
+        await callback_query.answer("Произошла ошибка")
 
 # Handle the follow-up question callback
 async def handle_followup_callback(client, callback_query):
     try:
-        await callback_query.answer("Please send your follow-up question")
+        await callback_query.answer("Пожалуйста, отправьте ваш дополнительный вопрос")
         await callback_query.message.edit_text(
-            "❓ **Ask a Follow-up Question**\n\n"
-            "Please type your question about the image or the extracted text.",
+            "❓ **Задайте дополнительный вопрос**\n\n"
+            "Пожалуйста, введите ваш вопрос по изображению или извлечённому тексту.",
             reply_markup=None
         )
     except Exception as e:
         logger.exception(f"Error in handle_followup_callback: {str(e)}")
-        await callback_query.answer("An error occurred")
+        await callback_query.answer("Произошла ошибка")
 
 
