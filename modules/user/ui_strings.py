@@ -4,91 +4,91 @@ Module containing all UI strings used in the bot for easy translation.
 
 # Start and Help commands
 START_MESSAGE = """
-👋 Welcome to AdvChatGptBot!
+👋 Добро пожаловать в PocketGPT Bot!
 
-I'm your advanced AI assistant powered by cutting-edge technology.
+Я ваш продвинутый AI-ассистент, работающий на основе передовых технологий.
 
-🔸 Chat directly with me
-🔸 Send voice messages
-🔸 Generate images with /img
-🔸 Adjust settings with /settings
-🔸 Clear chat history with /new
+🔸 Общайтесь со мной напрямую
+🔸 Отправляйте голосовые сообщения
+🔸 Генерируйте изображения с помощью /img
+🔸 Настраивайте параметры с помощью /settings
+🔸 Очищайте историю чата с помощью /new
 
-💡 For more information, use /help
+💡 Для получения дополнительной информации используйте /help
 """
 
 HELP_MESSAGE = """
-**AdvChatGptBot Help**
+**Помощь AdvChatGptBot**
 
-**Commands:**
-• /start - Start the bot
-• /help - Show this help menu
-• /settings - Configure bot settings
-• /new or /newchat - Start a new conversation
-• /img [prompt] - Generate an image
-• /rate - Rate the bot
+**Команды:**
+• /start - Запустить бота
+• /help - Показать это меню помощи
+• /settings - Настроить параметры бота
+• /new или /newchat - Начать новый разговор
+• /img [запрос] - Сгенерировать изображение
+• /rate - Оценить бота
 
-**Features:**
-• Send text messages for AI responses
-• Record voice messages for voice interaction
-• Send images to extract text and get AI analysis
-• In groups, use /ai to interact with the bot
+**Возможности:**
+• Отправляйте текстовые сообщения для получения ответов AI
+• Записывайте голосовые сообщения для голосового взаимодействия
+• Отправляйте изображения для извлечения текста и получения анализа AI
+• В группах используйте /ai для взаимодействия с ботом
 
-Need more help? Use the settings menu to adjust language, voice preferences, and more.
+Нужна дополнительная помощь? Используйте меню настроек, чтобы отрегулировать язык, предпочтения голоса и многое другое.
 """
 
 # Settings UI
-SETTINGS_MAIN = "⚙️ **Bot Settings**\n\nCustomize your experience with AdvChatGptBot"
-SETTINGS_VOICE = "🎙️ **Voice Settings**\n\nCurrent mode: {}\n\nChoose how you want to receive responses to voice messages"
-SETTINGS_LANGUAGE = "🌐 **Language Settings**\n\nCurrent language: {}\n\nSelect your preferred interface language"
-SETTINGS_ASSISTANT = "🤖 **Assistant Mode**\n\nCurrent mode: {}\n\nChoose the personality of your AI assistant"
-SETTINGS_SUPPORT = "📞 **Support**\n\nGet help with using the bot"
+SETTINGS_MAIN = "⚙️ **Настройки бота**\n\nНастройте свой опыт работы с AdvChatGptBot"
+SETTINGS_VOICE = "🎙️ **Настройки голоса**\n\nТекущий режим: {}\n\nВыберите, как вы хотите получать ответы на голосовые сообщения"
+SETTINGS_LANGUAGE = "🌐 **Настройки языка**\n\nТекущий язык: {}\n\nВыберите предпочитаемый язык интерфейса"
+SETTINGS_ASSISTANT = "🤖 **Режим ассистента**\n\nТекущий режим: {}\n\nВыберите личность вашего AI-ассистента"
+SETTINGS_SUPPORT = "📞 **Поддержка**\n\nПолучите помощь по использованию бота"
 
 # Buttons
-BTN_BACK = "🔙 Back"
-BTN_SETTINGS = "⚙️ Settings"
-BTN_HELP = "❓ Help"
-BTN_COMMANDS = "📋 Commands"
+BTN_BACK = "🔙 Назад"
+BTN_SETTINGS = "⚙️ Настройки"
+BTN_HELP = "❓ Помощь"
+BTN_COMMANDS = "📋 Команды"
 
 # Voice settings
-VOICE_SETTING_UPDATED = "Voice setting updated to: {}"
-TEXT_MODE = "Text mode"
-VOICE_MODE = "Voice mode"
+VOICE_SETTING_UPDATED = "Настройка голоса обновлена на: {}"
+TEXT_MODE = "Текстовый режим"
+VOICE_MODE = "Голосовой режим"
 
 # Language settings
-LANGUAGE_UPDATED = "Language updated to: {}"
+LANGUAGE_UPDATED = "Язык обновлён: {}"
 
 # Assistant modes
-MODE_UPDATED = "Assistant mode updated to: {}"
-MODE_CHATBOT = "Chatbot"
-MODE_CODER = "Coder"
-MODE_PROFESSIONAL = "Professional"
-MODE_TEACHER = "Teacher"
-MODE_THERAPIST = "Therapist"
-MODE_ASSISTANT = "Assistant"
-MODE_GAMER = "Gamer"
-MODE_TRANSLATOR = "Translator"
+MODE_UPDATED = "Режим ассистента обновлён: {}"
+MODE_CHATBOT = "Чат-бот"
+MODE_CODER = "Программист"
+MODE_PROFESSIONAL = "Профессионал"
+MODE_TEACHER = "Учитель"
+MODE_THERAPIST = "Терапевт"
+MODE_ASSISTANT = "Помощник"
+MODE_GAMER = "Геймер"
+MODE_TRANSLATOR = "Переводчик"
 
 # Image generation
-GENERATING_IMAGES = "🖼️ Generating images. Please wait..."
-IMAGES_GENERATED = "Images generated for prompt: {}"
+GENERATING_IMAGES = "🖼️ Генерирую изображения. Пожалуйста, подождите..."
+IMAGES_GENERATED = "Изображения сгенерированы по запросу: {}"
 
 # Voice messages
-PROCESSING_VOICE = "🎙️ Processing your voice message..."
-VOICE_NOT_UNDERSTOOD = "Sorry, I couldn't understand the audio."
-VOICE_SERVICE_ERROR = "There was an issue with the speech recognition service. Please try again later."
+PROCESSING_VOICE = "🎙️ Обрабатываю ваше голосовое сообщение..."
+VOICE_NOT_UNDERSTOOD = "Извините, не удалось распознать аудио."
+VOICE_SERVICE_ERROR = "Произошла ошибка при распознавании речи. Пожалуйста, попробуйте позже."
 
 # OCR
-EXTRACTING_TEXT = "🔍 Extracting text from image..."
-OCR_ERROR = "Error: Failed to extract text from image. {}"
+EXTRACTING_TEXT = "🔍 Извлекаю текст из изображения..."
+OCR_ERROR = "Ошибка: не удалось извлечь текст из изображения. {}"
 
 # New chat
-CHAT_CLEARED = "Your chat history has been cleared. You can start a new conversation now."
+CHAT_CLEARED = "Ваша история чата очищена. Теперь вы можете начать новый диалог."
 
 # Rate bot
-RATE_MESSAGE = "⭐ Please rate your experience with AdvChatGptBot"
-RATE_THANK_YOU = "Thank you for your feedback! Your rating: {}/5"
+RATE_MESSAGE = "⭐ Пожалуйста, оцените работу PocketGPT"
+RATE_THANK_YOU = "Спасибо за ваш отзыв! Ваша оценка: {}/5"
 
 # Error messages
-ERROR_OCCURRED = "An error occurred: {}"
-COMMAND_NOT_ALLOWED = "You are not allowed to use this command."
+ERROR_OCCURRED = "Произошла ошибка: {}"
+COMMAND_NOT_ALLOWED = "Вам не разрешено использовать эту команду."

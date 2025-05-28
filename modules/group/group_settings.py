@@ -36,15 +36,15 @@ async def leave_group(client: Client, message):
 
 async def invite_command(client, message):
     if len(message.command) != 2:
-        await message.reply("Invalid command! Please provide a group ID.")
+        await message.reply("Неверная команда! Пожалуйста, укажите ID группы.")
         return
     chat_id = message.text.split(" ")[1]
 
     try:
         chat_invite_link = await client.export_chat_invite_link(int(chat_id))
-        await message.reply_text(f"Invite link for group {chat_id}:\n{chat_invite_link}")
+        await message.reply_text(f"Ссылка-приглашение для группы {chat_id}:\n{chat_invite_link}")
     except Exception as e:
-        await message.reply_text(f"Failed to get invite link for group {chat_id}.\nError: {e}")
+        await message.reply_text(f"Не удалось получить ссылку-приглашение для группы {chat_id}.\nОшибка: {e}")
 
 async def leave_group(client: Client, message: Message) -> None:
     """
@@ -138,24 +138,24 @@ async def invite_command(client: Client, message: Message) -> None:
                     
                     # Send the invite link
                     await message.reply_text(
-                        f"🔗 **Invite Link for {chat_title}**\n\n"
+                        f"🔗 **Ссылка-приглашение для {chat_title}**\n\n"
                         f"{invite_link.invite_link}\n\n"
-                        f"Expires: {'Never' if not invite_link.expire_date else invite_link.expire_date}\n"
-                        f"Created by: [You](tg://user?id={user_id})"
+                        f"Истекает: {'Никогда' if not invite_link.expire_date else invite_link.expire_date}\n"
+                        f"Создано: [Вами](tg://user?id={user_id})"
                     )
                 except Exception as e:
-                    await message.reply_text(f"Error getting invite link: {str(e)}")
+                    await message.reply_text(f"Ошибка при получении ссылки-приглашения: {str(e)}")
                     logger.error(f"Error getting invite link: {e}")
             else:
                 await message.reply_text(
-                    "Please specify a chat ID or username.\n\n"
-                    "Usage: `/invite @chatusername` or `/invite -1001234567890`"
+                    "Пожалуйста, укажите ID чата или имя пользователя.\n\n"
+                    "Использование: `/invite @chatusername` или `/invite -1001234567890`"
                 )
         except Exception as e:
-            await message.reply_text(f"Error processing command: {str(e)}")
+            await message.reply_text(f"Ошибка при обработке команды: {str(e)}")
             logger.error(f"Error in invite command: {e}")
     else:
-        await message.reply_text("Only admins can use this command.")
+        await message.reply_text("Только администраторы могут использовать эту команду.")
 
 async def is_group_admin(client: Client, chat_id: int, user_id: int) -> bool:
     """

@@ -119,28 +119,10 @@ async def maintenance_check(user_id: int) -> bool:
     return await is_feature_enabled("maintenance_mode")
 
 async def maintenance_message(user_id: int) -> str:
-    """
-    Get the maintenance message translated to the user's language
-    
-    Args:
-        user_id: User ID for translation
-        
-    Returns:
-        Translated maintenance message
-    """
     maintenance_text = """
-🚧 **Bot Maintenance in Progress** 🚧
-
-Our bot is currently undergoing maintenance to improve its performance and features.
-We apologize for any inconvenience and appreciate your patience.
-
-The system will be back online as soon as possible.
-
-For urgent inquiries, please contact:
-• Developer: @techycsr
-• Website: techycsr.me
+🚧 <b>Бот на техническом обслуживании</b> 🚧\n\nНаш бот сейчас проходит обслуживание для улучшения работы и добавления новых функций.\n\nПриносим извинения за неудобства и благодарим за терпение!\n\nСистема будет доступна как можно скорее.\n\nПо срочным вопросам:\n• Разработчик: @techycsr\n• Сайт: techycsr.me
 """
-    return await async_translate_to_lang(maintenance_text, user_id)
+    return maintenance_text
 
 async def settings_others_callback(client, callback: CallbackQuery):
     """Handle settings_others callback - redirects to maintenance section now"""
@@ -155,39 +137,30 @@ async def maintenance_settings(client, callback: CallbackQuery):
         await show_admin_panel(client, callback)
     else:
         # Regular user, show maintenance info
-        message = await async_translate_to_lang(
-            "⚙️ **System Information**\n\n"
-            "This section shows the current status of the bot's features. "
-            "If features are disabled, please check back later or contact support.", 
-            user_id
-        )
+        message = "⚙️ <b>Системная информация</b>\n\nВ этом разделе отображается текущий статус функций бота. Если какие-то функции отключены, попробуйте позже или обратитесь в поддержку."
         
         # Show current feature states
         states = await get_feature_states()
         
         # Translate status texts
-        enabled_text = await async_translate_to_lang("✅ Enabled", user_id)
-        disabled_text = await async_translate_to_lang("❌ Disabled", user_id)
-        back_text = await async_translate_to_lang("🔙 Back", user_id)
+        enabled_text = "✅ Включено"
+        disabled_text = "❌ Отключено"
+        back_text = "🔙 Назад"
         
         # Feature texts
-        ai_text = await async_translate_to_lang("AI Response", user_id)
-        img_text = await async_translate_to_lang("Image Generation", user_id)
-        voice_text = await async_translate_to_lang("Voice Features", user_id)
+        ai_text = "🤖 Ответы ИИ"
+        img_text = "🖼️ Генерация изображений"
+        voice_text = "🎙️ Голосовые функции"
         
         # Build status message
-        status_message = f"\n\n**Current Feature Status:**\n\n"
+        status_message = f"\n\n<b>Текущий статус функций:</b>\n\n"
         status_message += f"• {ai_text}: {enabled_text if states.get('ai_response', True) else disabled_text}\n"
         status_message += f"• {img_text}: {enabled_text if states.get('image_generation', True) else disabled_text}\n"
         status_message += f"• {voice_text}: {enabled_text if states.get('voice_features', True) else disabled_text}\n"
         
         # Add maintenance mode message if enabled
         if states.get('maintenance_mode', False):
-            maintenance_info = await async_translate_to_lang(
-                "\n⚠️ **The bot is currently in maintenance mode.**\n"
-                "Some features may be unavailable.", 
-                user_id
-            )
+            maintenance_info = "\n⚠️ <b>Бот сейчас в режиме обслуживания.</b>\nНекоторые функции могут быть недоступны."
             status_message += maintenance_info
         
         # Build keyboard
@@ -208,18 +181,14 @@ async def show_admin_panel(client, callback: CallbackQuery):
     states = await get_feature_states()
     
     # Translate UI elements
-    admin_title = await async_translate_to_lang("⚙️ **Advanced Admin Control Panel**", user_id)
-    admin_desc = await async_translate_to_lang(
-        "Control your bot's features and maintenance settings from this centralized dashboard.\n\n"
-        "Toggle features on/off with a single click. Changes take effect immediately.", 
-        user_id
-    )
+    admin_title = "⚙️ <b>Админ-панель управления</b>"
+    admin_desc = "Управляйте функциями и режимом обслуживания бота из этого централизованного меню.\n\nВключайте и выключайте функции одной кнопкой. Изменения применяются сразу."
     
     # Feature labels
-    maint_label = await async_translate_to_lang("🚧 Maintenance Mode", user_id)
-    img_label = await async_translate_to_lang("🖼️ Image Generation", user_id)
-    voice_label = await async_translate_to_lang("🎙️ Voice Features", user_id)
-    ai_label = await async_translate_to_lang("🤖 AI Response", user_id)
+    maint_label = "🚧 Режим обслуживания"
+    img_label = "🖼️ Генерация изображений"
+    voice_label = "🎙️ Голосовые функции"
+    ai_label = "🤖 Ответы ИИ"
     
     # Status indicators
     maint_status = "✅" if states.get("maintenance_mode", False) else "❌"
@@ -228,12 +197,12 @@ async def show_admin_panel(client, callback: CallbackQuery):
     ai_status = "✅" if states.get("ai_response", True) else "❌"
     
     # Button labels
-    toggle_text = await async_translate_to_lang("Toggle", user_id)
-    info_text = await async_translate_to_lang("Info", user_id)
-    back_text = await async_translate_to_lang("🔙 Back", user_id)
-    stats_text = await async_translate_to_lang("📊 Statistics", user_id)
-    users_text = await async_translate_to_lang("👥 Users", user_id)
-    donate_text = await async_translate_to_lang("💰 Donations", user_id)
+    toggle_text = "Переключить"
+    info_text = "Инфо"
+    back_text = "🔙 Назад"
+    stats_text = "📊 Статистика"
+    users_text = "👥 Пользователи"
+    donate_text = "💰 Донаты"
     
     # Import the Theme module
     from modules.ui.theme import Theme, Colors
@@ -242,7 +211,7 @@ async def show_admin_panel(client, callback: CallbackQuery):
     keyboard = []
     
     # Header section
-    keyboard.append([InlineKeyboardButton(f"{Colors.ADMIN} System Controls", callback_data="admin_header")])
+    keyboard.append([InlineKeyboardButton(f"{Colors.ADMIN} Управление системой", callback_data="admin_header")])
     
     # Get toggle layouts and add each row separately
     maintenance_toggle_rows = Theme.toggle_control_layout(
@@ -255,7 +224,7 @@ async def show_admin_panel(client, callback: CallbackQuery):
         keyboard.append(row)
     
     # Feature Controls header
-    keyboard.append([InlineKeyboardButton(f"{Colors.SETTINGS} Feature Controls", callback_data="features_header")])
+    keyboard.append([InlineKeyboardButton(f"{Colors.SETTINGS} Управление функциями", callback_data="features_header")])
     
     # Image generation toggle
     image_toggle_rows = Theme.toggle_control_layout(
@@ -288,7 +257,7 @@ async def show_admin_panel(client, callback: CallbackQuery):
         keyboard.append(row)
     
     # Advanced Admin Tools
-    keyboard.append([InlineKeyboardButton(f"{Colors.STATS} Admin Tools", callback_data="admin_tools_header")])
+    keyboard.append([InlineKeyboardButton(f"{Colors.STATS} Админ-инструменты", callback_data="admin_tools_header")])
     
     # Stats and Users buttons row
     keyboard.append([
@@ -305,7 +274,7 @@ async def show_admin_panel(client, callback: CallbackQuery):
     keyboard.append([Theme.back_button("support")])
     
     # Create status summary
-    status_summary = "\n\n**Current Status:**\n"
+    status_summary = "\n\n<b>Текущий статус:</b>\n"
     status_summary += f"• {maint_label}: {maint_status}\n"
     status_summary += f"• {img_label}: {img_status}\n"
     status_summary += f"• {voice_label}: {voice_status}\n"
@@ -322,17 +291,17 @@ async def show_admin_panel(client, callback: CallbackQuery):
         # Handle MessageNotModified error by silently ignoring it
         if "MESSAGE_NOT_MODIFIED" in str(e):
             # Just acknowledge the callback instead
-            await callback.answer("Panel already up to date")
+            await callback.answer("Панель уже актуальна")
             pass
         else:
             # For other errors, log and notify
             # logger.error(f"Error showing admin panel: {str(e)}")
-            await callback.answer(f"Error: {str(e)[:20]}...", show_alert=True)
+            await callback.answer(f"Ошибка: {str(e)[:20]}...", show_alert=True)
 
 async def handle_feature_toggle(client, callback: CallbackQuery):
     """Handle feature toggle callback"""
     if not await is_admin_user(callback.from_user.id):
-        await callback.answer("You don't have permission to change settings.", show_alert=True)
+        await callback.answer("У вас нет прав для изменения настроек.", show_alert=True)
         return
     
     # Extract feature and state from callback data
@@ -346,7 +315,7 @@ async def handle_feature_toggle(client, callback: CallbackQuery):
     
     # Show confirmation
     feature_name = feature.replace('_', ' ').title()
-    state_text = "enabled" if state else "disabled"
+    state_text = "включено" if state else "отключено"
     await callback.answer(f"{feature_name} {state_text}", show_alert=True)
     
     # Refresh admin panel
@@ -362,34 +331,28 @@ async def handle_feature_info(client, callback: CallbackQuery):
     
     # Feature descriptions - SHORTENED to avoid MESSAGE_TOO_LONG errors
     descriptions = {
-        "maintenance_mode": "When enabled, shows maintenance message to regular users. Only admins can use the bot.",
-        "image_generation": "Controls image generation commands (/generate, /img). Disable if service has issues.",
-        "voice_features": "Controls voice message processing. Can be disabled to reduce server load.",
-        "ai_response": "Controls bot's ability to respond to text messages. Core functionality."
+        "maintenance_mode": "Если включено, обычные пользователи видят сообщение о тех. работах. Только админы могут пользоваться ботом.",
+        "image_generation": "Включает/выключает генерацию изображений (/generate, /img). Отключайте при проблемах с сервисом.",
+        "voice_features": "Включает/выключает обработку голосовых сообщений. Можно отключить для снижения нагрузки.",
+        "ai_response": "Включает/выключает ответы бота на текстовые сообщения. Основная функция."
     }
     
     # Get current state
     states = await get_feature_states()
     current_state = states.get(feature, DEFAULT_FEATURE_STATES.get(feature, False))
-    state_text = "✅ Enabled" if current_state else "❌ Disabled"
+    state_text = "✅ Включено" if current_state else "❌ Отключено"
     
-    description = descriptions.get(feature, "No info available.")
+    description = descriptions.get(feature, "Нет информации.")
     feature_name = feature.replace('_', ' ').title()
     
     # Translate the message - kept very short for alert
-    info_text = await async_translate_to_lang(
-        f"{feature_name}: {description}\nState: {state_text}", 
-        user_id
-    )
+    info_text = f"{feature_name}: {description}\nСтатус: {state_text}"
     
     try:
         await callback.answer(info_text, show_alert=True)
     except Exception as e:
         # If too long, try an even shorter version
-        short_info = await async_translate_to_lang(
-            f"{feature_name}\nState: {state_text}", 
-            user_id
-        )
+        short_info = f"{feature_name}\nСтатус: {state_text}"
         await callback.answer(short_info, show_alert=True)
 
 async def handle_donation(client, callback: CallbackQuery):
@@ -398,25 +361,10 @@ async def handle_donation(client, callback: CallbackQuery):
     
     # Create donation message
     donation_text = """
-💰 **Support Bot Development**
-
-Your donations help maintain and improve this bot with new features and better performance.
-
-Developed by Chandan Singh (@techycsr), a tech enthusiast and student developer passionate about AI/ML and Telegram bots.
-
-**UPI Payment Option:**
-• UPI ID: `csr.info.in@oksbi`
-• Scan QR code or use any UPI app like Google Pay, PhonePe, Paytm, etc.
-
-**After donating:**
-Please message @techycsr with your donation details to get premium features activated.
-
-Thank you for your support! 🙏
+💰 <b>Поддержка разработки бота</b>\n\nВаши донаты помогают поддерживать и развивать этот бот, добавлять новые функции и улучшать производительность.\n\n
 """
     
-    # Translate the message and button
-    translated_donation = await async_translate_to_lang(donation_text, user_id)
-    back_btn = await async_translate_to_lang("🔙 Back", user_id)
+    back_btn = "🔙 Назад"
     
     # Create keyboard with back button
     keyboard = InlineKeyboardMarkup([
@@ -425,7 +373,7 @@ Thank you for your support! 🙏
     
     # Show donation message
     await callback.message.edit(
-        text=translated_donation,
+        text=donation_text,
         reply_markup=keyboard,
         disable_web_page_preview=True
     )

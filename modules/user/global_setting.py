@@ -14,39 +14,39 @@ user_voice_collection = db["user_voice_setting"]
 ai_mode_collection = db['ai_mode']
 
 modes = {
-    "chatbot": "Chatbot",
-    "coder": "Coder/Developer",
-    "professional": "Professional",
-    "teacher": "Teacher",
-    "therapist": "Therapist",
-    "assistant": "Personal Assistant",
-    "gamer": "Gamer",
-    "translator": "Translator"
+    "chatbot": "Чат-бот",
+    "coder": "Программист",
+    "professional": "Профессионал",
+    "teacher": "Учитель",
+    "therapist": "Терапевт",
+    "assistant": "Помощник",
+    "gamer": "Геймер",
+    "translator": "Переводчик"
 }
 
 languages = {
-    "en": "🇬🇧 English",
-    "hi": "🇮🇳 Hindi",
-    "zh": "🇨🇳 Chinese",
-    "ar": "🇸🇦 Arabic",
-    "fr": "🇫🇷 French",
-    "ru": "🇷🇺 Russian"
+    "en": "🇬🇧 Английский",
+    "hi": "🇮🇳 Хинди",
+    "zh": "🇨🇳 Китайский",
+    "ar": "🇸🇦 Арабский",
+    "fr": "🇫🇷 Французский",
+    "ru": "🇷🇺 Русский"
 }
 
 async def global_setting_command(client, message):
     global_settings_text = """
-**Setting Menu for User {mention}**
+⚙️ <b>Меню настроек для пользователя {mention}</b>
 
-**User ID**: {user_id}
-**User language:** {language}
-**User voice**: {voice_setting}
-**User mode**: {mode}
+<b>ID пользователя</b>: {user_id}
+<b>Язык интерфейса</b>: {language}
+<b>Голосовой режим</b>: {voice_setting}
+<b>Режим ассистента</b>: {mode}
 
-You can change your settings from @AdvChatGptBot's settings menu.
+Вы можете изменить настройки через меню настроек @AdvChatGptBot.
 
-**@AdvChatGptBot**
+<b>@AdvChatGptBot</b>
 """
-    temp = await message.reply_text("**Fetching your settings...**")
+    temp = await message.reply_text("**Получение ваших настроек...**")
 
     user_id = message.from_user.id
     user_lang_doc = user_lang_collection.find_one({"user_id": user_id})

@@ -44,48 +44,48 @@ async def info_command(client: Client, message: Message) -> None:
                             target_user = await client.get_users(username)
                             target_user_id = target_user.id
                         except Exception:
-                            await message.reply_text("Could not find user with that username.")
+                            await message.reply_text("Не удалось найти пользователя с таким именем.")
                             return
                     except Exception as e:
-                        await message.reply_text(f"Error finding user: {e}")
+                        await message.reply_text(f"Ошибка при поиске пользователя: {e}")
                         return
                 else:
                     await message.reply_text(
-                        "Please specify a user ID or username, or reply to a message from the user."
+                        "Пожалуйста, укажите ID или имя пользователя, или ответьте на сообщение от пользователя."
                     )
                     return
             
             if not target_user_id:
-                await message.reply_text("Could not determine target user.")
+                await message.reply_text("Не удалось определить целевого пользователя.")
                 return
             
             # Get user info
             try:
                 # Format user information
-                user_info = f"👤 **User Information**\n\n"
-                user_info += f"• **User ID:** `{target_user_id}`\n"
-                user_info += f"• **First Name:** {target_user.first_name}\n"
+                user_info = f"👤 **Информация о пользователе**\n\n"
+                user_info += f"• **ID пользователя:** `{target_user_id}`\n"
+                user_info += f"• **Имя:** {target_user.first_name}\n"
                 
                 if target_user.last_name:
-                    user_info += f"• **Last Name:** {target_user.last_name}\n"
+                    user_info += f"• **Фамилия:** {target_user.last_name}\n"
                 
                 if target_user.username:
-                    user_info += f"• **Username:** @{target_user.username}\n"
+                    user_info += f"• **Имя пользователя:** @{target_user.username}\n"
                 
-                user_info += f"• **Is Bot:** {'Yes' if target_user.is_bot else 'No'}\n"
-                user_info += f"• **Is Premium:** {'Yes' if target_user.is_premium else 'No'}\n"
+                user_info += f"• **Это бот:** {'Да' if target_user.is_bot else 'Нет'}\n"
+                user_info += f"• **Премиум:** {'Да' if target_user.is_premium else 'Нет'}\n"
                 
                 # Add when the bot can contact this user
-                user_info += f"• **Can be contacted:** {'Yes' if not target_user.is_bot and not target_user.is_deleted else 'No'}\n"
+                user_info += f"• **С ботом можно связаться:** {'Да' if not target_user.is_bot and not target_user.is_deleted else 'Нет'}\n"
                 
                 # Add user link
-                user_info += f"\n[Direct Link to User](tg://user?id={target_user_id})"
+                user_info += f"\n[Прямая ссылка на пользователя](tg://user?id={target_user_id})"
                 
                 # Create keyboard for additional actions
                 keyboard = [
                     [
-                        InlineKeyboardButton("Message User", url=f"tg://user?id={target_user_id}"),
-                        InlineKeyboardButton("User Profile", url=f"tg://user?id={target_user_id}")
+                        InlineKeyboardButton("Написать пользователю", url=f"tg://user?id={target_user_id}"),
+                        InlineKeyboardButton("Профиль пользователя", url=f"tg://user?id={target_user_id}")
                     ]
                 ]
                 
@@ -95,11 +95,11 @@ async def info_command(client: Client, message: Message) -> None:
                 )
                 
             except Exception as e:
-                await message.reply_text(f"Error getting user info: {e}")
-                logger.error(f"Error getting user info: {e}")
+                await message.reply_text(f"Ошибка при получении информации о пользователе: {e}")
+                logger.error(f"Ошибка при получении информации о пользователе: {e}")
         
         except Exception as e:
-            await message.reply_text(f"Error processing command: {e}")
-            logger.error(f"Error in info command: {e}")
+            await message.reply_text(f"Ошибка при обработке команды: {e}")
+            logger.error(f"Ошибка в info команде: {e}")
     else:
-        await message.reply_text("Only admins can use this command.")
+        await message.reply_text("Только администраторы могут использовать эту команду.")
