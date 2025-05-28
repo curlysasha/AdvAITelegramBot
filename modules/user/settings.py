@@ -89,23 +89,17 @@ async def settings_language_callback(client, callback):
 
     print(f"Voice setting for {user_id}: {voice_setting}")
     
-    # Efficiently translate all text at once
-    texts_to_translate = ["Voice", "Text", "Current setting: Answering in", "queries only.", "🔙 Back"]
-    translated_texts = await batch_translate(texts_to_translate, user_id)
-    
-    voice_text = translated_texts[0]
-    text_option = translated_texts[1]
-    current_setting = translated_texts[2]
-    queries_only = translated_texts[3]
-    back_btn = translated_texts[4]
+    # Жёстко задаём русские надписи
+    voice_text = "Голос"
+    text_option = "Текст"
+    current_setting = "Текущий режим: Ответы в"
+    queries_only = "только на запросы."
+    back_btn = "🔙 Назад"
     
     # Update the button texts based on the user's current setting
     voice_button_text = f"🎙️ {voice_text} ✅" if voice_setting == "voice" else f"🎙️ {voice_text}"
     text_button_text = f"💬 {text_option} ✅" if voice_setting == "text" else f"💬 {text_option}"
-
-    # Create the message text with translated components
     message_text = f"{current_setting} {voice_text if voice_setting == 'voice' else text_option} {queries_only}"
-
     keyboard = InlineKeyboardMarkup(
         [
             [
@@ -117,7 +111,6 @@ async def settings_language_callback(client, callback):
             ]
         ]
     )
-
     await callback.message.edit(
         text=message_text,
         reply_markup=keyboard,
@@ -139,23 +132,15 @@ async def change_voice_setting(client, callback):
         upsert=True
     )
 
-    # Efficiently translate all text at once
-    texts_to_translate = ["Voice", "Text", "Current setting: Answering in", "queries only.", "🔙 Back"]
-    translated_texts = await batch_translate(texts_to_translate, user_id)
-    
-    voice_text = translated_texts[0]
-    text_option = translated_texts[1]
-    current_setting = translated_texts[2]
-    queries_only = translated_texts[3]
-    back_btn = translated_texts[4]
-
-    # Create the message text with translated components
+    # Жёстко задаём русские надписи
+    voice_text = "Голос"
+    text_option = "Текст"
+    current_setting = "Текущий режим: Ответы в"
+    queries_only = "только на запросы."
+    back_btn = "🔙 Назад"
     message_text = f"{current_setting} {voice_text if new_voice_setting == 'voice' else text_option} {queries_only}"
-
-    # Update the button texts with checkmarks
     voice_button_text = f"🎙️ {voice_text} ✅" if new_voice_setting == "voice" else f"🎙️ {voice_text}"
     text_button_text = f"💬 {text_option} ✅" if new_voice_setting == "text" else f"💬 {text_option}"
-
     keyboard = InlineKeyboardMarkup(
         [
             [
@@ -167,8 +152,6 @@ async def change_voice_setting(client, callback):
             ]
         ]
     )
-
-    # Edit the message to reflect the new settings
     await callback.message.edit(
         text=message_text,
         reply_markup=keyboard,
@@ -232,26 +215,24 @@ You can change your settings from below options.
         mode=current_mode_label,
     )
     
-    # Efficiently translate all button labels at once
+    # Жёстко задаём русские надписи для кнопок и текста
     button_labels = ["🌐 Язык", "🎙️ Голос", "🤖 Ассистент", "🔧 Другое", "🔙 Назад"]
-    translated_labels = await batch_translate(button_labels, user_id)
-
+    labels = button_labels
     keyboard = InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton(translated_labels[0], callback_data="settings_lans"),
-                InlineKeyboardButton(translated_labels[1], callback_data="settings_v")
+                InlineKeyboardButton(labels[0], callback_data="settings_lans"),
+                InlineKeyboardButton(labels[1], callback_data="settings_v")
             ],
             [
-                InlineKeyboardButton(translated_labels[2], callback_data="settings_assistant"),
-                InlineKeyboardButton(translated_labels[3], callback_data="settings_others")
+                InlineKeyboardButton(labels[2], callback_data="settings_assistant"),
+                InlineKeyboardButton(labels[3], callback_data="settings_others")
             ],
             [
-                InlineKeyboardButton(translated_labels[4], callback_data="back_to_help")
+                InlineKeyboardButton(labels[4], callback_data="back_to_help")
             ]
         ]
     )
-
     await callback.message.edit(
         text=formatted_text,
         reply_markup=keyboard,
