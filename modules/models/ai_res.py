@@ -45,7 +45,7 @@ def get_response(history: List[Dict[str, str]]) -> str:
         return response.choices[0].message.content
     except Exception as e:
         print(f"Error generating response: {e}")
-        return "I'm experiencing technical difficulties. Please try again in a moment."
+        return "Пожалуйста отправьте запрос еще раз, я иногда подглючиваю 🤒"
 
 def get_streaming_response(history: List[Dict[str, str]]) -> Optional[Generator]:
     """
@@ -280,7 +280,7 @@ async def aires(client: Client, message: Message) -> None:
 
     except Exception as e:
         print(f"Error in aires function: {e}")
-        await message.reply_text("I'm experiencing technical difficulties. Please try again in a moment.")
+        await message.reply_text("Пожалуйста отправьте запрос еще раз, я иногда подглючиваю 🤒")
 
 async def new_chat(client: Client, message: Message) -> None:
     """

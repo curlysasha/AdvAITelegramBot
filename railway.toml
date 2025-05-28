@@ -1,0 +1,12 @@
+# Railway deployment configuration for AdvAITelegramBot2
+# Use this file as your Railway service's start command
+
+[build]
+  # No build step needed for pure Python
+
+[start]
+  cmd = "python run.py"
+
+[env]
+  # Railway will inject environment variables from the dashboard
+  # You can also use .env.production for local testing

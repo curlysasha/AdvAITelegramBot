@@ -1,0 +1,17 @@
+# .dockerignore for Railway and local Docker builds
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+build/
+dist/
+.eggs/
+*.egg-info/
+*.egg
+sessions/
+logs/
+.DS_Store
+.env
+.env.*
