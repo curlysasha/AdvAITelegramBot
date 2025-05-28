@@ -401,9 +401,9 @@ async def handle_feedback(client: Client, callback_query: CallbackQuery) -> None
             target_user_id = int(parts[3])
             generation_id = parts[4]
             
-            await callback_query.answer("Thanks for your positive feedback!")
+            await callback_query.answer("Спасибо за ваш положительный отзыв!")
             await callback_query.message.edit_text(
-                callback_query.message.text + "\n\n✅ *Feedback received: You liked the images!*",
+                callback_query.message.text + "\n\n✅ *Отзыв получен: Вам понравились изображения!*",
                 reply_markup=None
             )
             
@@ -436,9 +436,9 @@ async def handle_feedback(client: Client, callback_query: CallbackQuery) -> None
             target_user_id = int(parts[3])
             generation_id = parts[4]
             
-            await callback_query.answer("Thanks for your feedback. We'll improve!")
+            await callback_query.answer("Спасибо за ваш отзыв. Мы постараемся стать лучше!")
             await callback_query.message.edit_text(
-                callback_query.message.text + "\n\n📝 *Feedback received: We'll work to improve our image generation.*",
+                callback_query.message.text + "\n\n📝 *Отзыв получен: Мы постараемся улучшить генерацию изображений.*",
                 reply_markup=None
             )
             
