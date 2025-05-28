@@ -33,34 +33,34 @@ prompt_storage = {}
 # Constants for style definitions
 STYLE_DEFINITIONS = {
     "realistic": {
-        "name": "Realistic",
-        "description": "Photo-realistic, detailed images",
-        "prompt_additions": "ultra realistic, detailed, photographic quality",
-        "button_text": "🖼️ Realistic"
+        "name": "Фотореализм",
+        "description": "Фотореалистичные, детализированные изображения",
+        "prompt_additions": "ультрареалистично, детализировано, фотографическое качество",
+        "button_text": "🖼️ Фотореализм"
     },
     "artistic": {
-        "name": "Artistic",
-        "description": "Creative, artistic style like a painting",
-        "prompt_additions": "artistic style, creative, vibrant colors, painting-like",
-        "button_text": "🎨 Artistic"
+        "name": "Артистичный",
+        "description": "Креативный, художественный стиль как у картины",
+        "prompt_additions": "художественный стиль, креативно, яркие цвета, как картина",
+        "button_text": "🎨 Арт"
     },
     "sketch": {
-        "name": "Sketch",
-        "description": "Hand-drawn sketch or drawing style",
-        "prompt_additions": "hand-drawn sketch, pencil drawing, line art, sketched appearance",
-        "button_text": "✏️ Sketch"
+        "name": "Скетч",
+        "description": "Рисунок от руки или эскиз",
+        "prompt_additions": "нарисовано от руки, карандашный рисунок, линейное искусство, вид эскиза",
+        "button_text": "✏️ Скетч"
     },
     "cartoon": {
-        "name": "Cartoon",
-        "description": "Fun cartoon or animated style",
-        "prompt_additions": "cartoon style, animated look, colorful, simplified features",
-        "button_text": "🧸 Cartoon"
+        "name": "Мультфильм",
+        "description": "Весёлый мультяшный или анимированный стиль",
+        "prompt_additions": "мультяшный стиль, анимированный вид, красочно, упрощённые черты",
+        "button_text": "🧸 Мультфильм"
     },
     "3d": {
-        "name": "3D Render",
-        "description": "3D rendered style with depth and texture",
-        "prompt_additions": "3D render, volumetric lighting, high detail, realistic textures, depth",
-        "button_text": "🌟 3D Render"
+        "name": "3D Рендер",
+        "description": "3D-рендер с глубиной и текстурой",
+        "prompt_additions": "3D рендер, объемное освещение, высокая детализация, реалистичные текстуры, глубина",
+        "button_text": "🌟 3D Рендер"
     }
 }
 
@@ -263,7 +263,7 @@ async def generate_images(prompt: str, style: str, max_images: int = 1) -> Tuple
             continue
     
     if not image_urls:
-        return None, "Failed to generate images. Please try a different prompt or try again later."
+        return None, "Не удалось сгенерировать изображения. Пожалуйста, попробуйте другой запрос или попробуйте позже."
     
     # Process URLs to local paths
     image_urls = [u.replace("/images/", "./generated_images/") for u in image_urls]
@@ -274,11 +274,11 @@ async def generate_images(prompt: str, style: str, max_images: int = 1) -> Tuple
 async def update_generation_progress(client: Client, chat_id: int, message_id: int, prompt: str, style: str) -> None:
     """Show a dynamic progress indicator while generating images"""
     progress_stages = [
-        "⏳ Analyzing your prompt...",
-        "🧠 Crafting initial concepts...",
-        "🎨 Applying artistic elements...", 
-        "✨ Applying finishing touches...",
-        "📷 Rendering final images..."
+        "⏳ Анализируем ваш запрос...",
+        "🧠 Генерируем начальные концепции...",
+        "🎨 Добавляем художественные элементы...", 
+        "✨ Финальные штрихи...",
+        "📷 Рендерим финальные изображения..."
     ]
     
     style_info = STYLE_DEFINITIONS.get(style, STYLE_DEFINITIONS["realistic"])
@@ -292,9 +292,9 @@ async def update_generation_progress(client: Client, chat_id: int, message_id: i
             await client.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=f"🎭 **Generating Images**\n\n"
-                f"Your prompt: `{prompt}`\n\n"
-                f"Style: `{style_info['name']}`\n\n"
+                text=f"🎭 **Генерация изображений**\n\n"
+                f"Ваш запрос: `{prompt}`\n\n"
+                f"Стиль: `{style_info['name']}`\n\n"
                 f"{stage}"
             )
     except asyncio.CancelledError:
@@ -330,10 +330,10 @@ async def handle_generate_command(client: Client, message: Message) -> None:
             prompt = message.text.split(None, 1)[1]
         else:
             await message.reply_text(
-                "🖼️ **Image Generation**\n\n"
-                "Please provide a prompt to generate images.\n\n"
-                "Example: `/img a serene mountain landscape`\n\n"
-                "You'll be able to choose from several artistic styles after entering your prompt."
+                "🖼️ **Генерация изображений**\n\n"
+                "Пожалуйста, введите запрос для генерации изображения.\n\n"
+                "Пример: `/img спокойный горный пейзаж`\n\n"
+                "После ввода запроса вы сможете выбрать художественный стиль."
             )
             return
             
@@ -359,7 +359,7 @@ async def handle_generate_command(client: Client, message: Message) -> None:
                 user_states[user_id] = UserGenerationState(user_id, prompt)
             else:
                 await message.reply_text(
-                    "⏳ I'm already working on your previous image request. Please wait for it to complete."
+                    "⏳ Я уже работаю над вашим предыдущим запросом на изображение. Пожалуйста, подождите его завершения."
                 )
                 return
             
@@ -368,7 +368,7 @@ async def handle_generate_command(client: Client, message: Message) -> None:
         
     except Exception as e:
         logger.error(f"Error in image generation command handler: {str(e)}")
-        await message.reply_text(f"❌ **Error**\n\nFailed to process image generation request: {str(e)}")
+        await message.reply_text(f"❌ **Ошибка**\n\nНе удалось обработать запрос на генерацию изображения: {str(e)}")
         # Reset user state in case of error
         if user_id in user_states:
             user_states[user_id].set_processing(False)
@@ -549,9 +549,9 @@ async def handle_feedback(client: Client, callback_query: CallbackQuery) -> None
             # Send the style selection message in the same chat where the regeneration was requested
             style_msg = await client.send_message(
                 chat_id=chat_id,
-                text=f"🎭 **Choose Image Style for Regeneration**\n\n"
-                f"Your prompt: `{prompt}`\n\n"
-                f"Please select a style for your image:",
+                text=f"🎭 **Выберите стиль изображения для регенерации**\n\n"
+                f"Ваш запрос: `{prompt}`\n\n"
+                f"Пожалуйста, выберите стиль для вашего изображения:",
                 reply_markup=style_markup
             )
             
@@ -602,9 +602,9 @@ async def show_style_selection(client: Client, message: Message, prompt: str) ->
     
     # Send the style selection message
     style_msg = await message.reply_text(
-        f"🎭 **Choose Image Style**\n\n"
-        f"Your prompt: `{prompt}`\n\n"
-        f"Please select a style for your image:",
+        f"🎭 **Выберите стиль изображения**\n\n"
+        f"Ваш запрос: `{prompt}`\n\n"
+        f"Пожалуйста, выберите стиль для вашего изображения:",
         reply_markup=style_markup
     )
     
@@ -637,7 +637,7 @@ async def process_style_selection(client: Client, callback_query: CallbackQuery)
         # For regeneration, we should always match the current user
         if clicked_user_id != target_user_id:
             logger.warning(f"User mismatch: clicked_user={clicked_user_id}, target_user={target_user_id}")
-            await callback_query.answer("This isn't your image request.")
+            await callback_query.answer("Это не ваш запрос на изображение.")
             return
             
         # Check if the user has an active state
@@ -646,17 +646,17 @@ async def process_style_selection(client: Client, callback_query: CallbackQuery)
             # create a new state for them (helpful for regeneration flow)
             if callback_query.message and callback_query.message.text:
                 # Try to extract prompt from the message text
-                match = re.search(r"Your prompt: `(.*?)`", callback_query.message.text)
+                match = re.search(r"Ваш запрос: `(.*?)`", callback_query.message.text)
                 if match:
                     prompt = match.group(1)
                     # Create a new state for this user
                     user_states[clicked_user_id] = UserGenerationState(clicked_user_id, prompt)
                     logger.info(f"Created new state for user {clicked_user_id} with prompt: {prompt}")
                 else:
-                    await callback_query.answer("Your request has expired. Please make a new request.")
+                    await callback_query.answer("Ваш запрос устарел. Пожалуйста, создайте новый запрос.")
                     return
             else:
-                await callback_query.answer("Your request has expired. Please make a new request.")
+                await callback_query.answer("Ваш запрос устарел. Пожалуйста, создайте новый запрос.")
                 return
             
         # Get the user's state
@@ -664,7 +664,7 @@ async def process_style_selection(client: Client, callback_query: CallbackQuery)
         
         # Check if already processing
         if state.is_processing:
-            await callback_query.answer("Already generating your images, please wait...")
+            await callback_query.answer("Уже генерируем ваши изображения, пожалуйста, подождите...")
             return
             
         # Set state to processing to prevent duplicate requests
@@ -675,16 +675,16 @@ async def process_style_selection(client: Client, callback_query: CallbackQuery)
         style_info = STYLE_DEFINITIONS.get(style, STYLE_DEFINITIONS["realistic"])
         
         # Acknowledge the selection
-        await callback_query.answer(f"Generating images in {style_info['name']} style...")
+        await callback_query.answer(f"Генерируем изображения в стиле {style_info['name']}...")
         
         # Update the message to show processing
         processing_message = await client.edit_message_text(
             chat_id=chat_id,  # Use the actual chat ID
             message_id=callback_query.message.id,
-            text=f"🎭 **Generating Images**\n\n"
-            f"Your prompt: `{state.prompt}`\n\n"
-            f"Style: `{style_info['name']}`\n\n"
-            f"⏳ The AI is working its magic... Creating something special for you!"
+            text=f"🎭 **Генерация изображений**\n\n"
+            f"Ваш запрос: `{state.prompt}`\n\n"
+            f"Стиль: `{style_info['name']}`\n\n"
+            f"⏳ ИИ творит магию... Создаём нечто особенное для вас!"
         )
         
         # Start the progress updater
@@ -711,7 +711,7 @@ async def process_style_selection(client: Client, callback_query: CallbackQuery)
         logger.error(f"Error processing style selection: {str(e)}")
         try:
             await callback_query.message.edit_text(
-                f"❌ **Error**\n\nFailed to process style selection: {str(e)}"
+                f"❌ **Ошибка**\n\nНе удалось обработать выбор стиля: {str(e)}"
             )
         except Exception:
             pass
@@ -746,7 +746,7 @@ async def generate_and_send_images(client: Client, message: Message, prompt: str
             style_info = STYLE_DEFINITIONS.get(style, STYLE_DEFINITIONS["realistic"])
             await client.send_message(
                 chat_id=chat_id,
-                text=f"❌ **Image Generation Failed**\n\n{error}\n\nPlease try a different prompt or style."
+                text=f"❌ **Не удалось сгенерировать изображение**\n\n{error}\n\nПопробуйте другой запрос или стиль."
             )
             
             # Get user info for mention
@@ -782,7 +782,7 @@ async def generate_and_send_images(client: Client, message: Message, prompt: str
         # Prepare media group with generated images
         media_group = []
         for i, url in enumerate(urls):
-            caption = f"🖼️ **AI Generated Image**\n\nPrompt: `{prompt}`\nStyle: `{style_info['name']}`" if i == 0 else ""
+            caption = f"🖼️ **ИИ сгенерировал изображение**\n\nЗапрос: `{prompt}`\nСтиль: `{style_info['name']}`" if i == 0 else ""
             media_group.append(InputMediaPhoto(url, caption=caption))
         
         # Send generated images
@@ -797,16 +797,16 @@ async def generate_and_send_images(client: Client, message: Message, prompt: str
         # Create feedback buttons
         feedback_markup = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("👍 Love it", callback_data=f"img_feedback_positive_{user_id}_{generation_id}"),
-                InlineKeyboardButton("👎 Not good", callback_data=f"img_feedback_negative_{user_id}_{generation_id}")
+                InlineKeyboardButton("👍 Нравится", callback_data=f"img_feedback_positive_{user_id}_{generation_id}"),
+                InlineKeyboardButton("👎 Не понравилось", callback_data=f"img_feedback_negative_{user_id}_{generation_id}")
             ],
-            [InlineKeyboardButton("🔄 Regenerate", callback_data=f"img_regenerate_{user_id}_{prompt_id}")]
+            [InlineKeyboardButton("🔄 Сгенерировать ещё", callback_data=f"img_regenerate_{user_id}_{prompt_id}")]
         ])
         
         # Send feedback message
         feedback_msg = await client.send_message(
             chat_id=chat_id,
-            text="**How do you like these images?**\n\nYour feedback helps improve our AI.",
+            text="**Как вам эти изображения?**\n\nВаш отзыв поможет улучшить ИИ.",
             reply_markup=feedback_markup,
             reply_to_message_id=sent_message[0].id if sent_message else None
         )
@@ -854,7 +854,7 @@ async def generate_and_send_images(client: Client, message: Message, prompt: str
         logger.error(f"Error in image generation: {str(e)}")
         await client.send_message(
             chat_id=chat_id,
-            text=f"❌ **Error**\n\nFailed to generate images: {str(e)}"
+            text=f"❌ **Ошибка**\n\nНе удалось сгенерировать изображения: {str(e)}"
         )
     finally:
         # ALWAYS reset ALL user states for this user, no matter what
