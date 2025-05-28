@@ -306,7 +306,7 @@ async def new_chat(client: Client, message: Message) -> None:
         })
 
         # Send confirmation message with modern UI
-        await message.reply_text("🔄 **Conversation Reset**\n\nYour chat history has been cleared. Ready for a fresh conversation!")
+        await message.reply_text("🔄 **Сброс разговора**\n\nВаша история переписки со мной очищена и я готов к новым запросам!")
 
     except Exception as e:
         await message.reply_text(f"Error clearing chat history: {e}")
