@@ -264,6 +264,10 @@ async def callback_query(client, callback_query):
             # Just acknowledge the click for the headers
             await callback_query.answer()
             return
+        elif callback_query.data == "back_to_help":
+            from modules.user.start import start_inline
+            await start_inline(client, callback_query)
+            return
         
         # Standard menu callbacks
         if callback_query.data == "help":

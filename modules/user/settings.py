@@ -112,7 +112,7 @@ async def settings_inline(client, callback):
                 InlineKeyboardButton(translated_labels[3], callback_data="settings_others")
             ],
             [
-                InlineKeyboardButton(translated_labels[4], callback_data="back")
+                InlineKeyboardButton(translated_labels[4], callback_data="back_to_help")
             ]
         ]
     )
@@ -298,7 +298,7 @@ You can change your settings from below options.
                 InlineKeyboardButton(translated_labels[3], callback_data="settings_others")
             ],
             [
-                InlineKeyboardButton(translated_labels[4], callback_data="back")
+                InlineKeyboardButton(translated_labels[4], callback_data="back_to_help")
             ]
         ]
     )

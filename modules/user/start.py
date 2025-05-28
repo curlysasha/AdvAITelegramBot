@@ -80,15 +80,9 @@ async def start(client, message):
 async def start_inline(bot, callback):
     user_id = callback.from_user.id
     mention = callback.from_user.mention
-
-    # First safely format the welcome text with mention preservation
-    user_db.get_user_language(user_id)
+    user_lang = user_db.get_user_language(user_id)
     translated_welcome = await format_with_mention(welcome_text.replace("{user_mention}", "{mention}"), mention, user_id, user_lang)
-    
-    # Translate button texts
     translated_buttons = await batch_translate(button_list, user_id)
-
-    # Create the inline keyboard buttons with translated text
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(translated_buttons[0], url=f"https://t.me/{bot.me.username}?startgroup=true")],
         [InlineKeyboardButton(translated_buttons[1], callback_data="commands"),
@@ -96,8 +90,6 @@ async def start_inline(bot, callback):
         [InlineKeyboardButton(translated_buttons[3], callback_data="settings"),
          InlineKeyboardButton(translated_buttons[4], callback_data="support")]
     ])
-
-    # Send the welcome message with the GIF and the keyboard
     await bot.edit_message_caption(
         chat_id=callback.message.chat.id,
         message_id=callback.message.id,

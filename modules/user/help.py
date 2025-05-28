@@ -194,7 +194,7 @@ async def help(client, message):
         disable_web_page_preview=True
     )
 
-async def help_inline(bot, callback):
+async def help_inline(client, callback):
     user_id = callback.from_user.id
     
     # Translate help text and button labels
@@ -228,17 +228,19 @@ async def help_inline(bot, callback):
         [InlineKeyboardButton(analysis_btn, callback_data="help_analysis")],
         [InlineKeyboardButton(quickstart_btn, callback_data="help_quickstart")],
         [InlineKeyboardButton(cmd_btn, callback_data="commands")],
-        [InlineKeyboardButton(back_btn, callback_data="back")]
+        [InlineKeyboardButton(back_btn, callback_data="back_to_help")]
     ])
-
-    await bot.edit_message_text(
-        chat_id=callback.message.chat.id,
-        message_id=callback.message.id,
-        text=translated_help,
-        reply_markup=keyboard,
-        disable_web_page_preview=True
-    )
-
+    try:
+        await client.edit_message_text(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.id,
+            text=translated_help,
+            reply_markup=keyboard,
+            disable_web_page_preview=True
+        )
+    except Exception as e:
+        if "MESSAGE_NOT_MODIFIED" not in str(e):
+            raise
     await callback.answer()
     return
     

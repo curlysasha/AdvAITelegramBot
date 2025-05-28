@@ -60,7 +60,7 @@ async def settings_support_callback(client, callback_query):
                 InlineKeyboardButton(system_status_btn, callback_data="settings_others")
             ],
             [
-                InlineKeyboardButton(back_btn, callback_data="back")
+                InlineKeyboardButton(back_btn, callback_data="back_to_help")
             ]
         ]
     )

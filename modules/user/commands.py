@@ -116,9 +116,8 @@ async def command_inline(client, callback):
         admin_btn = "⚙️ Админ-команды"
         keyboard_buttons.append([InlineKeyboardButton(admin_btn, callback_data="cmd_admin")])
     
-    # Add back button
+    # Исправлено: callback_data для возврата к help-меню теперь "back_to_help"
     keyboard_buttons.append([InlineKeyboardButton(back_btn, callback_data="back_to_help")])
-    
     keyboard = InlineKeyboardMarkup(keyboard_buttons)
 
     await client.edit_message_text(
@@ -139,7 +138,7 @@ async def handle_command_callbacks(client, callback):
     if callback_data == "cmd_ai":
         # Show AI commands
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Назад", callback_data="commands")]
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_help")]
         ])
         
         await client.edit_message_text(
@@ -153,7 +152,7 @@ async def handle_command_callbacks(client, callback):
     elif callback_data == "cmd_img":
         # Show Image commands
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Назад", callback_data="commands")]
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_help")]
         ])
         
         await client.edit_message_text(
@@ -167,7 +166,7 @@ async def handle_command_callbacks(client, callback):
     elif callback_data == "cmd_main":
         # Show main commands
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Назад", callback_data="commands")]
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_help")]
         ])
         
         await client.edit_message_text(
@@ -182,7 +181,7 @@ async def handle_command_callbacks(client, callback):
         # Show admin commands (only for admins)
         if user_id in ADMINS:
             keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data="commands")]
+                [InlineKeyboardButton("🔙 Назад", callback_data="back_to_help")]
             ])
             
             await client.edit_message_text(
@@ -199,8 +198,6 @@ async def handle_command_callbacks(client, callback):
         # Возврат к help-меню
         from modules.user.help import help_inline
         await help_inline(client, callback)
-    elif callback_data == "commands":
-        await command_inline(client, callback)
     await callback.answer()
     return
 
