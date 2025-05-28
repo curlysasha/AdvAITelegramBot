@@ -196,31 +196,14 @@ async def help(client, message):
 
 async def help_inline(client, callback):
     user_id = callback.from_user.id
-    
-    # Translate help text and button labels
-    texts_to_translate = [
-        help_text, 
-        "🧠 AI Chat", 
-        "🖼️ Image Generation", 
-        "🎙️ Voice Features",
-        "🔍 Image Analysis",
-        "🚀 Quick Start",
-        "📋 Commands",
-        "🔙 Back"
-    ]
-    
-    translated_texts = await batch_translate(texts_to_translate, user_id)
-    
-    translated_help = translated_texts[0]
-    ai_btn = translated_texts[1]
-    img_btn = translated_texts[2]
-    voice_btn = translated_texts[3]
-    analysis_btn = translated_texts[4]
-    quickstart_btn = translated_texts[5]
-    cmd_btn = translated_texts[6]
-    back_btn = translated_texts[7]
-    
-    # Create interactive keyboard with feature categories
+    # Жёстко задаём русские надписи для кнопок
+    ai_btn = "🧠 AI-чат"
+    img_btn = "🖼️ Генерация изображений"
+    voice_btn = "🎙️ Голосовые функции"
+    analysis_btn = "🔍 Анализ изображений"
+    quickstart_btn = "🚀 Быстрый старт"
+    cmd_btn = "📋 Команды"
+    back_btn = "🔙 Назад"
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton(ai_btn, callback_data="help_ai")],
         [InlineKeyboardButton(img_btn, callback_data="help_img")],
@@ -234,7 +217,7 @@ async def help_inline(client, callback):
         await client.edit_message_text(
             chat_id=callback.message.chat.id,
             message_id=callback.message.id,
-            text=translated_help,
+            text=help_text,
             reply_markup=keyboard,
             disable_web_page_preview=True
         )

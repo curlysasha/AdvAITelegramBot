@@ -57,68 +57,17 @@ You can change your settings from below options.
 
 async def settings_inline(client, callback):
     user_id = callback.from_user.id
-    user_lang_doc = user_lang_collection.find_one({"user_id": user_id})
-    if user_lang_doc:
-        current_language = user_lang_doc['language']
-    else:
-        current_language = "ru"
-        user_lang_collection.insert_one({"user_id": user_id, "language": current_language})
-    
-    user_settings = user_voice_collection.find_one({"user_id": user_id})
-    if user_settings:
-        voice_setting = user_settings.get("voice", "voice")
-    else:
-        voice_setting = "voice"
-        user_voice_collection.insert_one({"user_id": user_id, "voice": "voice"})
-    
-    user_mode_doc = ai_mode_collection.find_one({"user_id": user_id})
-    if user_mode_doc:
-        current_mode = user_mode_doc['mode']
-    else:
-        current_mode = "chatbot"
-        ai_mode_collection.insert_one({"user_id": user_id, "mode": current_mode})
-    
-    current_mode_label = modes[current_mode]
-    current_language_label = languages[current_language]
-
-    # Get user mention
-    mention = callback.from_user.mention
-    
-    # First safely translate the template with mention preservation
-    translated_text = await format_with_mention(settings_text, mention, user_id, current_language)
-    
-    # Now format with the other variables
-    formatted_text = translated_text.format(
-        mention=mention,
-        user_id=callback.from_user.id,
-        language=current_language_label,
-        voice_setting=voice_setting,
-        mode=current_mode_label,
-    )
-
-    # Efficiently translate all button labels at once using the optimized UI element translator
-    button_labels = ["🌐 Language", "🎙️ Voice", "🤖 Assistant", "🔧 Others", "🔙 Back"]
-    translated_labels = await batch_translate(button_labels, user_id)
-    
-    # Use the translated button labels
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(translated_labels[0], callback_data="settings_lans"),
-                InlineKeyboardButton(translated_labels[1], callback_data="settings_v")
-            ],
-            [
-                InlineKeyboardButton(translated_labels[2], callback_data="settings_assistant"),
-                InlineKeyboardButton(translated_labels[3], callback_data="settings_others")
-            ],
-            [
-                InlineKeyboardButton(translated_labels[4], callback_data="back_to_help")
-            ]
-        ]
-    )
-
+    # Жёстко задаём русские надписи для кнопок
+    labels = ["🌐 Язык", "🎙️ Голос", "🤖 Ассистент", "🔧 Другое", "🔙 Назад"]
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(labels[0], callback_data="settings_lans"),
+         InlineKeyboardButton(labels[1], callback_data="settings_v")],
+        [InlineKeyboardButton(labels[2], callback_data="settings_assistant"),
+         InlineKeyboardButton(labels[3], callback_data="settings_others")],
+        [InlineKeyboardButton(labels[4], callback_data="back_to_help")]
+    ])
     await callback.message.edit(
-        text=formatted_text,
+        text="⚙️ <b>Настройки</b>\n\nЗдесь вы можете изменить язык, голосовые параметры и другие настройки.",
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
@@ -284,7 +233,7 @@ You can change your settings from below options.
     )
     
     # Efficiently translate all button labels at once
-    button_labels = ["🌐 Language", "🎙️ Voice", "🤖 Assistant", "🔧 Others", "🔙 Back"]
+    button_labels = ["🌐 Язык", "🎙️ Голос", "🤖 Ассистент", "🔧 Другое", "🔙 Назад"]
     translated_labels = await batch_translate(button_labels, user_id)
 
     keyboard = InlineKeyboardMarkup(

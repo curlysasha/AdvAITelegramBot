@@ -26,47 +26,23 @@ This versatile AI assistant supports a wide range of capabilities:
 # Function to handle settings support callback
 async def settings_support_callback(client, callback_query):
     user_id = callback_query.from_user.id
-    
-    # Translate support text
-    translated_support_text = await async_translate_to_lang(support_text, user_id)
-    
-    # Translate button labels
-    admins_btn = await async_translate_to_lang("👥 Contact Admin", user_id)
-    developers_btn = await async_translate_to_lang("💻 Developer Info", user_id)
-    community_btn = await async_translate_to_lang("🌐 Community", user_id)
-    source_code_btn = await async_translate_to_lang("⌨️ Source Code", user_id)
-    system_status_btn = await async_translate_to_lang("📊 System Status", user_id)
-    back_btn = await async_translate_to_lang("🔙 Back", user_id)
-
-    # Determine which button to show based on admin status
-    is_admin = await is_admin_user(user_id)
-    admin_button_text = await async_translate_to_lang("⚙️ Admin Panel", user_id) if is_admin else admins_btn
-    admin_button_callback = "admin_panel" if is_admin else "support_admins"
-    
-    # Add a subtle "Admin Mode" indicator for admins
-    admin_indicator = "\n\n🔑 **Admin Access Granted**" if is_admin else ""
-
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(admin_button_text, callback_data=admin_button_callback),
-                InlineKeyboardButton(developers_btn, callback_data="support_developers")
-            ],
-            [
-                InlineKeyboardButton(community_btn, url="https://t.me/AdvChatGpt"),
-                InlineKeyboardButton(source_code_btn, url="https://github.com/TechyCSR/AdvAITelegramBot")
-            ],
-            [
-                InlineKeyboardButton(system_status_btn, callback_data="settings_others")
-            ],
-            [
-                InlineKeyboardButton(back_btn, callback_data="back_to_help")
-            ]
-        ]
-    )
-
+    # Жёстко задаём русские надписи для кнопок
+    admin_button_text = "👑 Админ-панель"
+    developers_btn = "👨‍💻 Разработчики"
+    community_btn = "🌐 Сообщество"
+    source_code_btn = "⌨️ Исходный код"
+    system_status_btn = "🖥️ Статус системы"
+    back_btn = "🔙 Назад"
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton(admin_button_text, callback_data="admin_panel"),
+         InlineKeyboardButton(developers_btn, callback_data="support_developers")],
+        [InlineKeyboardButton(community_btn, url="https://t.me/AdvChatGpt"),
+         InlineKeyboardButton(source_code_btn, url="https://github.com/TechyCSR/AdvAITelegramBot")],
+        [InlineKeyboardButton(system_status_btn, callback_data="settings_others")],
+        [InlineKeyboardButton(back_btn, callback_data="back_to_help")]
+    ])
     await callback_query.message.edit(
-        text=translated_support_text + admin_indicator,
+        text="<b>Поддержка и информация</b>\n\nЗдесь вы можете получить помощь, узнать о разработчиках и статусе системы.",
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
