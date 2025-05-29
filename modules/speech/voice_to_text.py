@@ -51,9 +51,9 @@ async def process_audio_file(input_path, output_path=None, language="ru-RU"):
 async def handle_voice_message(client, message):
     # Show processing message with modern UI
     processing_msg = await message.reply_text(
-        "🎙️ **Processing Voice Message**\n\n"
-        "Converting your audio to text...\n"
-        "Please wait a moment."
+        "🎙️ **Обработка голосового сообщения**\n\n"
+        "Преобразую ваше аудио в текст...\n"
+        "Пожалуйста, подождите немного."
     )
     
     # Determine the file type (voice or audio)
@@ -63,10 +63,10 @@ async def handle_voice_message(client, message):
         elif message.audio:
             file_id = message.audio.file_id
         else:
-            await processing_msg.edit_text("❌ Unsupported media type")
+            await processing_msg.edit_text("❌ Неподдерживаемый тип медиа")
             return
     except Exception as e:
-        await processing_msg.edit_text(f"❌ Error processing media: {e}")
+        await processing_msg.edit_text(f"❌ Ошибка при обработке медиа: {e}")
         return
 
     # Create temporary directory for audio processing
@@ -80,25 +80,25 @@ async def handle_voice_message(client, message):
         # Handle recognition errors
         if error:
             await processing_msg.edit_text(
-                f"❌ **Voice Recognition Failed**\n\n{error}\n\n"
-                "Please try recording again with clearer audio."
+                f"❌ <b>Ошибка распознавания голоса</b>\n\n{error}\n\n"
+                "Пожалуйста, попробуйте записать сообщение ещё раз, чётко и без шума."
             )
             return
         
         # Handle empty recognition
         if not recognized_text or recognized_text.strip() == "":
             await processing_msg.edit_text(
-                "⚠️ **No Speech Detected**\n\n"
-                "I couldn't detect any speech in your audio.\n"
-                "Please try recording again with clearer speech."
+                "⚠️ <b>Речь не обнаружена</b>\n\n"
+                "Я не смог распознать речь в вашем аудиосообщении.\n"
+                "Пожалуйста, попробуйте записать ещё раз, чётко произнося слова."
             )
             return
         
         # Update processing message
         await processing_msg.edit_text(
-            "✅ **Voice Recognized**\n\n"
-            f"I heard: *{recognized_text}*\n\n"
-            "Generating response..."
+            "✅ <b>Голос распознан</b>\n\n"
+            f"<b>Вы сказали:</b> <i>{recognized_text}</i>\n\n"
+            "Генерирую ответ..."
         )
         
         # Get user preferences for voice responses
@@ -148,9 +148,9 @@ async def handle_voice_message(client, message):
                                     if current_time - last_update_time >= 0.8 or len(buffer) >= 50:
                                         try:
                                             await processing_msg.edit_text(
-                                                f"🔊 **Voice Message**\n\n"
-                                                f"You said: *{recognized_text}*\n\n"
-                                                f"**Response:**\n{complete_response}"
+                                                "🔊 <b>Голосовое сообщение</b>\n\n"
+                                                f"<b>Вы сказали:</b> <i>{recognized_text}</i>\n\n"
+                                                f"<b>Ответ:</b>\n{complete_response}"
                                             )
                                             buffer = ""
                                             last_update_time = current_time
@@ -172,25 +172,25 @@ async def handle_voice_message(client, message):
                 if response_mode == "voice":
                     # Convert text response to voice
                     await processing_msg.edit_text(
-                        f"🔊 **Voice Message**\n\n"
-                        f"You said: *{recognized_text}*\n\n"
-                        "Creating audio response..."
+                        "🔊 <b>Голосовое сообщение</b>\n\n"
+                        f"<b>Вы сказали:</b> <i>{recognized_text}</i>\n\n"
+                        "Создаю аудио-ответ..."
                     )
                     
                     audio_path = await handle_text_message(client, message, complete_response)
                     
                     # Update final text message with transcript
                     await processing_msg.edit_text(
-                        f"🔊 **Voice Conversation**\n\n"
-                        f"You said: *{recognized_text}*\n\n"
-                        f"**Response:** {complete_response}"
+                        "🔊 <b>Голосовой диалог</b>\n\n"
+                        f"<b>Вы сказали:</b> <i>{recognized_text}</i>\n\n"
+                        f"<b>Ответ:</b> {complete_response}"
                     )
                 else:
                     # Final text response update
                     await processing_msg.edit_text(
-                        f"🔊 **Voice Message**\n\n"
-                        f"You said: *{recognized_text}*\n\n"
-                        f"**Response:**\n{complete_response}"
+                        "🔊 <b>Голосовое сообщение</b>\n\n"
+                        f"<b>Вы сказали:</b> <i>{recognized_text}</i>\n\n"
+                        f"<b>Ответ:</b>\n{complete_response}"
                     )
             else:
                 # Fallback to non-streaming response
@@ -212,16 +212,16 @@ async def handle_voice_message(client, message):
                     
                     # Update final text message with transcript
                     await processing_msg.edit_text(
-                        f"🔊 **Voice Conversation**\n\n"
-                        f"You said: *{recognized_text}*\n\n"
-                        f"**Response:** {ai_response}"
+                        "🔊 <b>Голосовой диалог</b>\n\n"
+                        f"<b>Вы сказали:</b> <i>{recognized_text}</i>\n\n"
+                        f"<b>Ответ:</b> {ai_response}"
                     )
                 else:
                     # Text-only response
                     await processing_msg.edit_text(
-                        f"🔊 **Voice Message**\n\n"
-                        f"You said: *{recognized_text}*\n\n"
-                        f"**Response:**\n{ai_response}"
+                        "🔊 <b>Голосовое сообщение</b>\n\n"
+                        f"<b>Вы сказали:</b> <i>{recognized_text}</i>\n\n"
+                        f"<b>Ответ:</b>\n{ai_response}"
                     )
                 
                 complete_response = ai_response
@@ -230,17 +230,16 @@ async def handle_voice_message(client, message):
             response_markup = InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton(
-                        "🔊 Voice Responses" if response_mode != "voice" else "📝 Text Responses", 
+                        "🔊 Голосовые ответы" if response_mode != "voice" else "📝 Текстовые ответы", 
                         callback_data=f"toggle_voice_{user_id}"
                     )
                 ],
                 [
-                    InlineKeyboardButton("🎙️ New Voice Message", callback_data=f"new_voice_{user_id}")
+                    InlineKeyboardButton("🎙️ Новое голосовое сообщение", callback_data=f"new_voice_{user_id}")
                 ]
             ])
-            
             await message.reply_text(
-                "**Response Preferences**",
+                "<b>Настройки ответа</b>",
                 reply_markup=response_markup
             )
             
@@ -249,7 +248,7 @@ async def handle_voice_message(client, message):
             await user_log(client, message, f"\nVoice: {recognized_text}\n\nAI: {complete_response}")
             
         except Exception as e:
-            await message.reply_text(f"An error occurred: {e}")
+            await message.reply_text(f"Произошла ошибка: {e}")
             print(f"Error in speech Voice2Text function: {e}")
 
 # Handle voice preference toggle callback
@@ -271,11 +270,9 @@ async def handle_voice_toggle(client, callback_query):
     )
     
     # Notify user
-    setting_text = "voice" if new_setting == "voice" else "text"
-    await callback_query.answer(f"Changed to {setting_text} responses")
-    
-    # Update button
-    button_text = "📝 Text Responses" if new_setting == "voice" else "🔊 Voice Responses"
+    setting_text = "Голосовые" if new_setting == "voice" else "Текстовые"
+    await callback_query.answer(f"Режим изменён: {setting_text} ответы")
+    button_text = "📝 Текстовые ответы" if new_setting == "voice" else "🔊 Голосовые ответы"
     
     # Get existing keyboard
     current_markup = callback_query.message.reply_markup

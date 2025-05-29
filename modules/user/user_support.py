@@ -5,25 +5,25 @@ from modules.maintenance import maintenance_settings, is_admin_user
 
 from config import ADMINS as admin_ids, OWNER_ID
 
-support_text="""
-🤖 **Advanced AI Bot Information**
+support_text ="""
+🤖 **Информация о продвинутом AI-боте**
 
-This versatile AI assistant supports a wide range of capabilities:
+Этот универсальный AI-ассистент поддерживает широкий спектр возможностей:
 
-• 🖼️ Image Generation (DALL-E-3)
-• 🎙️ Voice Interactions
-• 📝 Image-to-Text Analysis
-• 💬 Advanced Conversational AI
-• 🌐 Multi-language Support
+• 🖼️ Генерация изображений (DALL-E-3)
+• 🎙️ Голосовые взаимодействия
+• 📝 Анализ изображений (текст из фото)
+• 💬 Продвинутый диалоговый AI
+• 🌐 Многоязычная поддержка
 
-**Developed by:** [Chandan Singh](https://techycsr.me)
-**Technology:** GPT-4o and GPT-4o-mini
-**Version:** 2.0
+**Разработчик:** [Chandan Singh](https://techycsr.me)
+**Технологии:** GPT-4o и GPT-4o-mini
+**Версия:** 2.0
 
-**Need assistance?** Choose an option below.
+**Нужна помощь?** Выберите опцию ниже.
 """
 
-# Function to handle settings support callback
+# Функция для обработки колбэка поддержки
 async def settings_support_callback(client, callback_query):
     user_id = callback_query.from_user.id
     # Жёстко задаём русские надписи для кнопок
@@ -39,44 +39,43 @@ async def settings_support_callback(client, callback_query):
         [InlineKeyboardButton(community_btn, url="https://t.me/AdvChatGpt"),
          InlineKeyboardButton(source_code_btn, url="https://github.com/TechyCSR/AdvAITelegramBot")],
         [InlineKeyboardButton(system_status_btn, callback_data="settings_others")],
-         [InlineKeyboardButton(back_btn, callback_data="back_to_help")],  # Кнопка поддержки временно убрана
+        [InlineKeyboardButton(back_btn, callback_data="back_to_help")],  # Кнопка поддержки временно убрана
     ])
     await callback_query.message.edit(
-        text="<b>Поддержка и информация</b>\n\nЗдесь вы можете получить помощь, узнать о разработчиках и статусе системы.",
+        text="<b>📞 Поддержка и информация</b>\n\nЗдесь вы можете получить помощь, узнать о разработчиках и статусе системы.",
         reply_markup=keyboard,
         disable_web_page_preview=True
     )
 
-# Function to handle support_admins callback
+# Функция для обработки колбэка с информацией об администраторах
 async def support_admins_callback(client, callback: CallbackQuery):
     user_id = callback.from_user.id
 
-    # Get admin contact information
+    # Информация о контакте администратора
     admin_contact_info = """
-👤 **Developer & Admin Contact**
+👤 **Контакт разработчика и администратора**
 
 **Chandan Singh** (@techycsr)
-Tech Enthusiast & Student Developer
+Техноэнтузиаст и разработчик
 
-• **Portfolio:** [techycsr.me](https://techycsr.me)
+• **Портфолио:** [techycsr.me](https://techycsr.me)
 • **GitHub:** [TechyCSR](https://github.com/TechyCSR)
 • **Email:** csr.info.in@gmail.com
 
-**About Me:**
-I'm a tech enthusiast with a strong passion for Python, AI/ML, and open-source development. I specialize in building Telegram bots using Pyrogram and MongoDB, developing AI-powered applications, and managing web development projects.
+**Обо мне:**
+Я увлечён Python, AI/ML и open-source. Специализируюсь на создании Telegram-ботов с Pyrogram и MongoDB, AI-приложениях и web-проектах.
 
-**Support Channels:**
-• Community: @AdvChatGpt
-• Issues: [GitHub Repository](https://github.com/TechyCSR/AdvAITelegramBot/issues)
+**Каналы поддержки:**
+• Сообщество: @AdvChatGpt
+• Вопросы: [GitHub Repository](https://github.com/TechyCSR/AdvAITelegramBot/issues)
 
-Feel free to reach out for assistance, feature requests, or to report issues.
+Пишите по любым вопросам, предложениям или для сообщения об ошибках.
     """
     
-    # Translate the admin info and button
-    translated_admin_info = await async_translate_to_lang(admin_contact_info, user_id)
-    back_btn = await async_translate_to_lang("🔙 Back", user_id)
-    contact_btn = await async_translate_to_lang("💬 Message Developer", user_id)
-    website_btn = await async_translate_to_lang("🌐 Visit Website", user_id)
+    # Переводим кнопки и текст (оставим на русском, чтобы не было лишних переводов)
+    back_btn = "🔙 Назад"
+    contact_btn = "💬 Написать разработчику"
+    website_btn = "🌐 Открыть сайт"
     
     keyboard = InlineKeyboardMarkup(
         [
@@ -91,14 +90,13 @@ Feel free to reach out for assistance, feature requests, or to report issues.
     )
     
     await callback.message.edit(
-        text=translated_admin_info,
+        text=admin_contact_info,
         reply_markup=keyboard,
-        disable_web_page_preview=False  # Enable preview to show website card
+        disable_web_page_preview=False  # Показываем карточку сайта
     )
 
-# Function to redirect to admin panel
+# Функция для перехода в админ-панель
 async def admin_panel_callback(client, callback: CallbackQuery):
-    """Redirect to the admin panel via maintenance settings"""
     user_id = callback.from_user.id
     
     # Verify user is admin before proceeding
