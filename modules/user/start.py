@@ -39,7 +39,7 @@ welcome_text = """
 
 tip_text = "💡 **Совет:** Введите любое сообщение, чтобы начать чат со мной, ИЛИ используй /img с промтом для генерации изображений!\n**Для получения списка команд используй /help.**"
 
-LOGO = "https://media1.giphy.com/media/v1.Y2lkPTc5MGI3NjExdnp4MnR0YXk3ZGNjenR6NGRoaDNkc2h2NDgxa285NnExaGM1MTZmYyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/S60CrN9iMxFlyp7uM8/giphy.gif"
+LOGO = "https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExMmNzeGptdm8xeDR4ZXFkODFxaXdxbmJyODF4eWtwcjB4bzl0Znc3ZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/09YEygqh7LhUV7sNMY/giphy.gif"
 
 async def start(client, message):
     await user_db.check_and_add_user(message.from_user.id)
